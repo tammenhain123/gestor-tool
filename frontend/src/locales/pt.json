@@ -1,0 +1,70 @@
+{
+  "app": { "title": "GestorTool" },
+  "nav": { "dashboard": "Dashboard", "companies": "Clientes", "users": "Usuários", "projects": "Projetos", "diligences": "Diligências" },
+  "auth": { "logout": "Sair", "login": "Login", "signIn": "Entrar", "username": "Usuário", "password": "Senha", "loginFailed": "Falha no login" },
+  "notifications": { "title": "Notificações", "markAllRead": "Marcar todas como lidas", "noNotifications": "Sem notificações", "clearAll": "Limpar todas" },
+  "dashboard": { "title": "Dashboard", "username": "Usuário:", "email": "Email:", "tenantId": "ID do tenant:", "projectsCardTitle": "Projetos", "projectsPerMonth": "Projetos por mês", "overview": "Total de projetos", "thisMonth": "Projetos desse mês" },
+  "dashboard_extra": { "companiesLabel": "Empresas criadas" },
+  "companies": { "title": "Clientes", "add": "Adicionar Cliente", "deleted": "Cliente excluído", "created": "Cliente criado", "updated": "Cliente atualizado", "saveFailed": "Falha ao salvar", "deleteFailed": "Falha ao excluir" }
+  ,"users": { "title": "Usuários", "deleted": "Usuário excluído", "created": "Usuário criado", "updated": "Usuário atualizado", "saveFailed": "Falha ao salvar", "deleteFailed": "Falha ao excluir", "deleteConfirm": "Excluir usuário?" }
+  ,"projects": { "title": "Projetos", "deleted": "Projeto excluído", "created": "Projeto criado", "updated": "Projeto atualizado", "saveFailed": "Falha ao salvar", "deleteFailed": "Falha ao excluir", "deleteConfirm": "Excluir projeto?" }
+  ,"diligences": { "title": "Diligências", "created": "Diligência solicitada", "project": "Projeto", "assignee": "Responsável", "start": "Início", "end": "Fim", "description": "Descrição", "create": "Solicitar diligência" },
+  "projectDetail": {
+    "tabs": ["Qualificação de Contrato", "Aba 2", "Aba 3", "Capacidade Estrutural e Financeira", "Requisitos e Necessidades", "Aba 6", "Aba 7", "Aba 8", "Aba 9"],
+    "loading": "Carregando...",
+    "projectNotFound": "Projeto não encontrado",
+    "noImage": "Sem imagem",
+    "creator": "Criador:",
+    "save": "Salvar",
+    "saved": "Salvo",
+    "tabsDefaultText": "Texto da aba {{num}}",
+    "noFile": "Nenhum arquivo"
+  },
+  "capacidade": {
+    "title": "Documentação Financeira",
+    "bankData": "Dados bancários",
+    "attachBank": "Anexar Extrato",
+    "addBank": "Adicionar Banco",
+    "attach": "Anexar",
+    "noFile": "Nenhum arquivo",
+    "saveButton": "Salvar Capacidade Estrutural e Financeira",
+    "bensTitle": "Bem Patrimonial - Imobiliário",
+    "bank": {
+      "banco": "Banco",
+      "numeroConta": "Nº Conta",
+      "agencia": "Agência",
+      "ano": "Ano",
+      "mes": "Mês"
+    },
+    "bem": {
+      "descricao": "Descrição do Bem",
+      "matricula": "Matrícula / Identificação",
+      "valorAtual": "Valor Atual",
+      "apresentacao": "Apresentação Física do Bem",
+      "addNew": "Adicionar Novo Bem Patrimonial"
+    },
+    "ocupante": {
+      "title": "Dados do Ocupante do Imóvel",
+      "nome": "Nome / Razão Social",
+      "cpfCnpj": "CPF / CNPJ",
+      "telefone": "Telefone"
+    },
+    "docs": {
+      "extrato": "Extrato Bancário",
+      "organograma": "Organograma de Cargos e Funções",
+      "endividamento": "Relatório de Endividamento",
+      "recebiveis": "Relatório de Recebíveis",
+      "estoque": "Relatório de Estoque",
+      "ativo": "Relatório de Ativo",
+      "aluguels_recebiveis": "Relatório de Aluguéis/Recebíveis"
+    }
+  }
+  ,"dashboard_extra_local": {
+    "noProjects": "Nenhum projeto disponível",
+    "totalUsers": "Total de usuários",
+    "activeUsers": "Usuários ativos",
+    "fieldsFilled": "campos preenchidos",
+    "allUsersScope": "Todos os usuários no escopo",
+    "last30Minutes": "Últimos 30 minutos"
+  }
+}

@@ -1,0 +1,29 @@
+Banco dedados : usergestortool
+		Nh69JX8VrA1FlsY4gO9J
+
+No ECR vejo as buils que fiz
+
+Comando para deploy do windows :
+
+aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin 960900884956.dkr.ecr.us-east-2.amazonaws.com
+
+AQUI ESTOU SUBINDO BACKEND
+
+docker build -t gestor/tool .
+
+docker tag gestor/tool:latest 960900884956.dkr.ecr.us-east-2.amazonaws.com/gestor/tool:latest
+
+docker push 960900884956.dkr.ecr.us-east-2.amazonaws.com/gestor/tool:latest
+
+
+ECS é onde a aplicação roda de fato	
+
+
+Criação do load balancer -> conectar load balance com o ECS .
+
+
+
+
+
+
+

@@ -1,0 +1,34 @@
+# ---------- STAGE 1: BUILD ----------
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copia package.json primeiro (melhor cache)
+COPY package*.json ./
+
+RUN npm install
+
+# Copia o restante do código
+COPY . .
+
+# Build do Nest
+RUN npm run build
+
+
+# ---------- STAGE 2: PRODUCTION ----------
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copia apenas dependências necessárias
+COPY package*.json ./
+RUN npm install --omit=dev
+
+# Copia arquivos compilados
+COPY --from=builder /app/dist ./dist
+
+# Porta padrão do Nest
+EXPOSE 4000
+
+# Start da aplicação
+CMD ["node", "dist/main.js"]

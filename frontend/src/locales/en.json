@@ -1,0 +1,70 @@
+{
+  "app": { "title": "GestorTool" },
+  "nav": { "dashboard": "Dashboard", "companies": "Clients", "users": "Users", "projects": "Projects", "diligences": "Diligences" },
+  "auth": { "logout": "Logout", "login": "Login", "signIn": "Sign in", "username": "Username", "password": "Password", "loginFailed": "Login failed" },
+  "notifications": { "title": "Notifications", "markAllRead": "Mark all read", "noNotifications": "No notifications", "clearAll": "Clear all" },
+  "dashboard": { "title": "Dashboard", "username": "Username:", "email": "Email:", "tenantId": "Tenant ID:", "projectsCardTitle": "Projects", "projectsPerMonth": "Projects per month", "overview": "Total projects", "thisMonth": "Projects this month" },
+  "dashboard_extra": { "companiesLabel": "Companies created" },
+  "companies": { "title": "Client", "add": "Add Client", "deleted": "Client deleted", "created": "Client created", "updated": "Client updated", "saveFailed": "Save failed", "deleteFailed": "Delete failed" }
+  ,"users": { "title": "Users", "deleted": "User deleted", "created": "User created", "updated": "User updated", "saveFailed": "Save failed", "deleteFailed": "Delete failed", "deleteConfirm": "Delete user?" }
+  ,"projects": { "title": "Projects", "deleted": "Project deleted", "created": "Project created", "updated": "Project updated", "saveFailed": "Save failed", "deleteFailed": "Delete failed", "deleteConfirm": "Delete project?" }
+  ,"diligences": { "title": "Diligences", "created": "Diligence requested", "project": "Project", "assignee": "Assignee", "start": "Start", "end": "End", "description": "Description", "create": "Create Diligence" },
+  "projectDetail": {
+    "tabs": ["Qualification", "Tab 2", "Tab 3", "Structural & Financial Capacity", "Requirements and Needs", "Tab 6", "Tab 7", "Tab 8", "Tab 9"],
+    "loading": "Loading...",
+    "projectNotFound": "Project not found",
+    "noImage": "No image",
+    "creator": "Creator:",
+    "save": "Save",
+    "saved": "Saved",
+    "tabsDefaultText": "Tab text {{num}}",
+    "noFile": "No file"
+  },
+  "capacidade": {
+    "title": "Financial Documentation",
+    "bankData": "Bank data",
+    "attachBank": "Attach Statement",
+    "addBank": "Add Bank",
+    "attach": "Attach",
+    "noFile": "No file",
+    "saveButton": "Save Structural & Financial Capacity",
+    "bensTitle": "Asset - Real Estate",
+    "bank": {
+      "banco": "Bank",
+      "numeroConta": "Account #",
+      "agencia": "Branch",
+      "ano": "Year",
+      "mes": "Month"
+    },
+    "bem": {
+      "descricao": "Asset Description",
+      "matricula": "Registration / Identification",
+      "valorAtual": "Current Value",
+      "apresentacao": "Physical Presentation of Asset",
+      "addNew": "Add New Asset"
+    },
+    "ocupante": {
+      "title": "Occupant Data",
+      "nome": "Name / Company",
+      "cpfCnpj": "CPF / CNPJ",
+      "telefone": "Phone"
+    },
+    "docs": {
+      "extrato": "Bank Statement",
+      "organograma": "Organization Chart",
+      "endividamento": "Indebtedness Report",
+      "recebiveis": "Receivables Report",
+      "estoque": "Inventory Report",
+      "ativo": "Assets Report",
+      "aluguels_recebiveis": "Rent/Receivables Report"
+    }
+  }
+  ,"dashboard_extra_local": {
+    "noProjects": "No projects available",
+    "totalUsers": "Total Users",
+    "activeUsers": "Active Users",
+    "fieldsFilled": "fields filled",
+    "allUsersScope": "All users in scope",
+    "last30Minutes": "Last 30 minutes"
+  }
+}
