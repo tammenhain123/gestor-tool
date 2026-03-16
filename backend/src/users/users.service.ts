@@ -186,7 +186,7 @@ async createUser(dto: CreateUserDto, creator: User): Promise<User> {
     let tenantFilter = ''
     const params: any[] = [cutoffIso, limit]
     if (tenantId) {
-      tenantFilter = `AND u."tenantId" = $3`
+      tenantFilter = `AND u."tenantId" = $3::uuid`
       params.push(tenantId)
     }
 

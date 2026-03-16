@@ -378,7 +378,6 @@ const Dashboard: React.FC = () => {
             </ResponsiveContainer>
           </Box>
         </Paper>
-        <Leaderboard />
       </Box>
     </Box>
   )
