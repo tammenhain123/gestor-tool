@@ -23,7 +23,8 @@ export class LocalAuthController {
     if (!dbUser) throw new UnauthorizedException('Invalid credentials')
 
     // Simple dev login: validate only that the user exists, no password check.
-    // Return the DB user id to the client.
-    return { userId: dbUser.id }
+    // Return the DB user id and role to the client so the frontend can
+    // persist user role locally without additional lookups.
+    return { userId: dbUser.id, role: dbUser.role }
   }
 }

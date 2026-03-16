@@ -112,6 +112,14 @@ const Layout: React.FC = () => {
     let mounted = true
     const load = async () => {
       try {
+        // Prefer role persisted in localStorage (written at login) to avoid extra API calls.
+        const storedRole = localStorage.getItem('db_user_role') || sessionStorage.getItem('db_user_role')
+        if (storedRole) {
+          if (!mounted) return
+          setLocalRole(String(storedRole).toUpperCase())
+          return
+        }
+
         const dbId = localStorage.getItem('db_user_id')
         if (dbId) {
           const res = await api.get(`/users/${dbId}`)

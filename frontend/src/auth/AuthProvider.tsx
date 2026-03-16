@@ -137,22 +137,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if ((resp as any).local_user_id || (resp as any).localUserId || (resp as any).userId) {
           const dbId = (resp as any).local_user_id || (resp as any).localUserId || (resp as any).userId
           localStorage.setItem('db_user_id', dbId)
-          // fetch full DB user to populate role + tenant
-          try {
-            const userResp = await api.get(`/users/${dbId}`)
-            const db = userResp?.data
-            if (db) {
-              setUser({
-                username: db.username || username,
-                email: db.email || undefined,
-                tenant_id: db.tenantId || db?.company?.id || undefined,
-                role: db.role ?? null,
-              })
-            } else {
+          // If backend returned role in the login response, persist it and
+          // set user immediately without an extra API call.
+          const respRole = (resp as any).role || (resp as any).userRole || null
+          if (respRole) {
+            const roleStr = String(respRole)
+            localStorage.setItem('db_user_role', roleStr)
+            setUser({
+              username: (resp as any).username || username || '',
+              email: (resp as any).email || undefined,
+              tenant_id: (resp as any).tenantId || undefined,
+              role: roleStr,
+            })
+          } else {
+            // fetch full DB user to populate role + tenant
+            try {
+              const userResp = await api.get(`/users/${dbId}`)
+              const db = userResp?.data
+              if (db) {
+                setUser({
+                  username: db.username || username,
+                  email: db.email || undefined,
+                  tenant_id: db.tenantId || db?.company?.id || undefined,
+                  role: db.role ?? null,
+                })
+                if (db.role) localStorage.setItem('db_user_role', String(db.role))
+              } else {
+                setUser({ username: username, email: undefined, tenant_id: undefined, role: null })
+              }
+            } catch (e) {
               setUser({ username: username, email: undefined, tenant_id: undefined, role: null })
             }
-          } catch (e) {
-            setUser({ username: username, email: undefined, tenant_id: undefined, role: null })
           }
           // ensure API interceptor is attached so X-DB-USER-ID header is sent
           attachTokenInterceptor(() => {
@@ -217,6 +232,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = (serverLogout = false) => {
     // Clear local tokens and user state
     localStorage.removeItem('auth')
+    localStorage.removeItem('db_user_id')
+    localStorage.removeItem('db_user_role')
+    sessionStorage.removeItem('db_user_id')
+    sessionStorage.removeItem('db_user_role')
     setUser(null)
     setToken(null)
 
