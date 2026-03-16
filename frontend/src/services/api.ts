@@ -1,7 +1,8 @@
 import axios, { AxiosInstance } from 'axios'
 
 export const api: AxiosInstance = axios.create({
-  baseURL: '',
+  // Use the `/api` prefix so Vite dev server proxies requests to the backend
+  baseURL: '/api',
   headers: {
     'Content-Type': 'application/json'
   }

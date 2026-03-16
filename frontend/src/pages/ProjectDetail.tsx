@@ -14,6 +14,7 @@ import Alert from '@mui/material/Alert'
 import { getProject } from '../services/project.service'
 import { Project } from '../types/project'
 import CapacidadeForm from '../components/projects/CapacidadeForm'
+import EstrategiaForm from '../components/projects/EstrategiaForm'
 import RequisitosForm from '../components/projects/RequisitosForm'
 import QualificationForm from '../components/projects/QualificationForm'
 import { useTranslation } from 'react-i18next'
@@ -129,6 +130,18 @@ const ProjectDetail: React.FC = () => {
                 } catch (e) {
                   console.error(e)
                   setToast({ type: 'error', message: 'Erro ao salvar qualificação' })
+                  throw e
+                }
+              }} />
+            ) : i === 1 ? (
+              <EstrategiaForm initial={undefined} projectId={id} projectName={project?.name} onSave={async (data) => {
+                try {
+                  console.log('Estratégia saved (simulado)', data)
+                  setToast({ type: 'success', message: 'Estratégia salva' })
+                  return data
+                } catch (e) {
+                  console.error(e)
+                  setToast({ type: 'error', message: 'Erro ao salvar estratégia' })
                   throw e
                 }
               }} />

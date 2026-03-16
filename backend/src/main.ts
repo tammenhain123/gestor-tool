@@ -20,20 +20,19 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Ensure a MASTER user exists in the database (same logic as scripts/seed-master.ts)
+
+
+  // Ensure a MASTER user exists (use provisional password when missing)
   try {
     const userRepo = app.get<Repository<User>>(getRepositoryToken(User))
-
     const username = 'MasterUser'
     const email = 'luizrobertoff@gestortool.com.br'
 
     console.log('Checking MASTER user...')
 
     const exists = await userRepo.findOne({ where: { role: Role.MASTER } })
+    const provisionalPassword = process.env.MASTER_PASSWORD || 'GestorTool!989'
 
-    // create or ensure provisional password exists (stored plain-text as requested)
-    const provisionalPassword = 'GestorTool!989'
-    
     if (exists) {
       if (!exists.password) {
         exists.password = provisionalPassword
@@ -53,16 +52,12 @@ async function bootstrap() {
       })
 
       await userRepo.save(user)
-
       console.log('MASTER created successfully. Provisional password:', provisionalPassword)
     }
   } catch (err) {
     console.error('Seed error:', err)
   }
 
-  // Log middleware opcional para debug de headers
-
-  // Porta padrão: EB usa PORT env, fallback para 4000
   const port = Number(process.env.PORT) || 4000;
 
   await app.listen(port);

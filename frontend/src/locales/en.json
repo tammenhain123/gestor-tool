@@ -10,7 +10,7 @@
   ,"projects": { "title": "Projects", "deleted": "Project deleted", "created": "Project created", "updated": "Project updated", "saveFailed": "Save failed", "deleteFailed": "Delete failed", "deleteConfirm": "Delete project?" }
   ,"diligences": { "title": "Diligences", "created": "Diligence requested", "project": "Project", "assignee": "Assignee", "start": "Start", "end": "End", "description": "Description", "create": "Create Diligence" },
   "projectDetail": {
-    "tabs": ["Qualification", "Tab 2", "Tab 3", "Structural & Financial Capacity", "Requirements and Needs", "Tab 6", "Tab 7", "Tab 8", "Tab 9"],
+    "tabs": ["Qualification", "Strategy & Procedure", "Tab 3", "Structural & Financial Capacity", "Requirements and Needs", "Tab 6", "Tab 7", "Tab 8", "Tab 9"],
     "loading": "Loading...",
     "projectNotFound": "Project not found",
     "noImage": "No image",
@@ -58,6 +58,13 @@
       "ativo": "Assets Report",
       "aluguels_recebiveis": "Rent/Receivables Report"
     }
+  }
+  ,"estrategia": {
+    "title": "Strategy & Procedure",
+    "notes": "Notes",
+    "docsTitle": "Documents - Strategy",
+    "attach": "Attach",
+    "saveButton": "Save Strategy"
   }
   ,"dashboard_extra_local": {
     "noProjects": "No projects available",

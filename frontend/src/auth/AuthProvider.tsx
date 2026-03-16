@@ -7,6 +7,7 @@ type User = {
   username: string
   email?: string
   tenant_id?: string
+  role?: string | null
 }
 
 type AuthContextType = {
@@ -51,7 +52,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const profile: User = {
           username: parsed.preferred_username || parsed.username || '',
           email: parsed.email,
-          tenant_id: parsed.tenant_id || parsed.tid
+          tenant_id: parsed.tenant_id || parsed.tid,
+          role: (Array.isArray(parsed?.realm_access?.roles) && parsed.realm_access.roles[0]) || (Array.isArray(parsed?.roles) && parsed.roles[0]) || parsed?.role || null,
         }
         setUser(profile)
         // attach interceptor that reads token from storage at request time
@@ -86,7 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             try {
               const resp = await api.get(`/users/${dbId}`)
               const db = resp?.data
-              if (db) setUser({ username: db.username || '', email: db.email || undefined, tenant_id: db.tenantId || db?.company?.id || undefined })
+              if (db) setUser({ username: db.username || '', email: db.email || undefined, tenant_id: db.tenantId || db?.company?.id || undefined, role: db.role ?? null })
             } catch (e) {
               // ignore
             }
@@ -130,13 +132,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // If username/password provided, do direct token call; otherwise fallback
     // to Keycloak redirect (not used by default)
     if (username && password) {
-      return tokenLogin(username, password).then((resp) => {
+      return tokenLogin(username, password).then(async (resp) => {
         // If using local auth, backend returns `local_user_id` (DB id).
         if ((resp as any).local_user_id || (resp as any).localUserId || (resp as any).userId) {
           const dbId = (resp as any).local_user_id || (resp as any).localUserId || (resp as any).userId
           localStorage.setItem('db_user_id', dbId)
-          // set a minimal user profile for UI
-          setUser({ username: username, email: undefined, tenant_id: undefined })
+          // fetch full DB user to populate role + tenant
+          try {
+            const userResp = await api.get(`/users/${dbId}`)
+            const db = userResp?.data
+            if (db) {
+              setUser({
+                username: db.username || username,
+                email: db.email || undefined,
+                tenant_id: db.tenantId || db?.company?.id || undefined,
+                role: db.role ?? null,
+              })
+            } else {
+              setUser({ username: username, email: undefined, tenant_id: undefined, role: null })
+            }
+          } catch (e) {
+            setUser({ username: username, email: undefined, tenant_id: undefined, role: null })
+          }
           // ensure API interceptor is attached so X-DB-USER-ID header is sent
           attachTokenInterceptor(() => {
             try {

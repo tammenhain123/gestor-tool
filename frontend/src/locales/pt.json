@@ -10,7 +10,7 @@
   ,"projects": { "title": "Projetos", "deleted": "Projeto excluído", "created": "Projeto criado", "updated": "Projeto atualizado", "saveFailed": "Falha ao salvar", "deleteFailed": "Falha ao excluir", "deleteConfirm": "Excluir projeto?" }
   ,"diligences": { "title": "Diligências", "created": "Diligência solicitada", "project": "Projeto", "assignee": "Responsável", "start": "Início", "end": "Fim", "description": "Descrição", "create": "Solicitar diligência" },
   "projectDetail": {
-    "tabs": ["Qualificação de Contrato", "Aba 2", "Aba 3", "Capacidade Estrutural e Financeira", "Requisitos e Necessidades", "Aba 6", "Aba 7", "Aba 8", "Aba 9"],
+    "tabs": ["Qualificação de Contrato", "Estratégia e procedimento", "Aba 3", "Capacidade Estrutural e Financeira", "Requisitos e Necessidades", "Aba 6", "Aba 7", "Aba 8", "Aba 9"],
     "loading": "Carregando...",
     "projectNotFound": "Projeto não encontrado",
     "noImage": "Sem imagem",
@@ -58,8 +58,15 @@
       "ativo": "Relatório de Ativo",
       "aluguels_recebiveis": "Relatório de Aluguéis/Recebíveis"
     }
-  }
-  ,"dashboard_extra_local": {
+  },
+  "estrategia": {
+    "title": "Estratégia e procedimento",
+    "notes": "Observações",
+    "docsTitle": "Documentos - Estratégia",
+    "attach": "Anexar",
+    "saveButton": "Salvar Estratégia"
+  },
+  "dashboard_extra_local": {
     "noProjects": "Nenhum projeto disponível",
     "totalUsers": "Total de usuários",
     "activeUsers": "Usuários ativos",

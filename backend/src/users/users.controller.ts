@@ -20,12 +20,32 @@ export class UsersController {
     // Only return existing local user if present.
     const dbUser = await this.usersService.findByAnyId(keycloakId)
 
+    const db = dbUser
+      ? {
+          id: dbUser.id,
+          keycloakId: dbUser.keycloakId,
+          username: dbUser.username,
+          email: dbUser.email,
+          tenantId: dbUser.tenantId,
+          role: dbUser.role,
+          company: dbUser.company ?? null,
+          createdAt: dbUser.createdAt,
+          updatedAt: dbUser.updatedAt,
+        }
+      : null
+
+    // debug log to help frontend role troubleshooting
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[UsersController.me] dbUser role=', db?.role ?? null, 'keycloakId=', keycloakId)
+    } catch (e) {}
+
     return {
       userId: user.sub,
       username,
       email,
       tenantId,
-      db: dbUser ?? null
+      db
     }
   }
 
@@ -38,11 +58,36 @@ export class UsersController {
     // allow if token maps to the same local user
     // If the token `sub` equals the requested local DB id (local auth case), allow
     try {
-      if (user && String((user as any).sub) === String(id)) return dbUser
+      if (user && String((user as any).sub) === String(id)) {
+        // ensure returned object contains explicit role field
+        return {
+          id: dbUser.id,
+          keycloakId: dbUser.keycloakId,
+          username: dbUser.username,
+          email: dbUser.email,
+          tenantId: dbUser.tenantId,
+          role: dbUser.role,
+          company: dbUser.company ?? null,
+          createdAt: dbUser.createdAt,
+          updatedAt: dbUser.updatedAt,
+        }
+      }
     } catch (e) {}
 
     const local = await this.usersService.findByAnyId((user as any).sub)
-    if (local && local.id === id) return dbUser
+    if (local && local.id === id) {
+      return {
+        id: dbUser.id,
+        keycloakId: dbUser.keycloakId,
+        username: dbUser.username,
+        email: dbUser.email,
+        tenantId: dbUser.tenantId,
+        role: dbUser.role,
+        company: dbUser.company ?? null,
+        createdAt: dbUser.createdAt,
+        updatedAt: dbUser.updatedAt,
+      }
+    }
 
     // allow if token has MASTER or ADMIN role
     const uAny: any = user as any
@@ -57,7 +102,24 @@ export class UsersController {
       (uAny?.resource_access && typeof uAny.resource_access === 'object' &&
         Object.values(uAny.resource_access).some((entry: any) => Array.isArray(entry.roles) && entry.roles.includes('MASTER')))
 
-    if (hasAdmin || hasMaster) return dbUser
+    if (hasAdmin || hasMaster) {
+      // debug log
+      try {
+        // eslint-disable-next-line no-console
+        console.log('[UsersController.getById] allowed by token role, returning user id=', dbUser.id, 'role=', dbUser.role)
+      } catch (e) {}
+      return {
+        id: dbUser.id,
+        keycloakId: dbUser.keycloakId,
+        username: dbUser.username,
+        email: dbUser.email,
+        tenantId: dbUser.tenantId,
+        role: dbUser.role,
+        company: dbUser.company ?? null,
+        createdAt: dbUser.createdAt,
+        updatedAt: dbUser.updatedAt,
+      }
+    }
 
     throw new ForbiddenException('Not allowed')
   }

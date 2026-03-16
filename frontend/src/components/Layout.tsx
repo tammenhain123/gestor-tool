@@ -134,11 +134,19 @@ const Layout: React.FC = () => {
   }, [token])
 
   const normalizedRoles = roles.map((r) => String(r).toUpperCase())
-  const effectiveRoles = localRole ? [localRole] : normalizedRoles
+
+  const effectiveRoles = React.useMemo(() => {
+    const s = new Set<string>()
+    normalizedRoles.forEach((r) => s.add(r))
+    if (localRole) s.add(localRole)
+    if (user?.role) s.add(String(user.role).toUpperCase())
+    return Array.from(s)
+  }, [normalizedRoles, localRole])
+
   const isMaster = effectiveRoles.includes('MASTER')
   const isAdmin = effectiveRoles.includes('ADMIN')
 
-  console.log('[Layout] user=', user, 'roles=', effectiveRoles)
+  console.log('[Layout] user=', user, 'tokenRoles=', normalizedRoles, 'localRole=', localRole, 'effectiveRoles=', effectiveRoles)
 
   return (
     <Box sx={{ display: 'flex' }}>
