@@ -27,25 +27,7 @@ export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const authDisabled = true
-    if (authDisabled) return true
-    const useKc = (process.env.USE_KEYCLOAK || 'true') !== 'false'
-    if (!useKc) return true
-    const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ])
-    if (!requiredRoles || requiredRoles.length === 0) return true
-
-    const req = context.switchToHttp().getRequest()
-    const user = req.user
-    if (!user) return false
-
-    const userRoles = extractRolesFromPayload(user)
-    if (!userRoles || userRoles.length === 0) return false
-    // allow MASTER to bypass role checks
-    if (userRoles.includes('MASTER')) return true
-
-    return requiredRoles.some((r) => userRoles.includes(r))
+    // All routes are public — no role checks.
+    return true
   }
 }
