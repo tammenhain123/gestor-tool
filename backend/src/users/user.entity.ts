@@ -12,8 +12,8 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id!: string
 
-  @Column({ type: 'varchar', length: 255, unique: true })
-  keycloakId!: string
+  @Column({ type: 'varchar', length: 255, unique: true, nullable: true })
+  keycloakId?: string | null
 
   @Column({ type: 'varchar', length: 150, nullable: true })
   username!: string | null

@@ -1,12 +1,17 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import * as bodyParser from 'body-parser';
 import { getRepositoryToken } from '@nestjs/typeorm'
 import { Repository } from 'typeorm'
 import { User, Role } from './users/user.entity'
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Increase payload size to accept large base64 data URIs (e.g. logo uploads)
+  app.use(bodyParser.json({ limit: '10mb' }));
+  app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
   // Validação global
   app.useGlobalPipes(
