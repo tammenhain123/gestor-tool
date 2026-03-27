@@ -92,17 +92,29 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
     }, [uploadedName, uploadedKey, uploadedMeta, data?.contratoFile, data?.contratoName, initial?.contratoName])
 
   React.useEffect(() => {
-    // Merge incoming initial values with existing state instead of overwriting.
-    // This prevents the form from being reset when the backend returns a
-    // minimal/partial object after save (eg. only `id`).
-    setData((prev: any) => ({ ...prev, ...mergedInitial }))
+    // Merge only the keys actually provided by `initial` into the current
+    // state. Avoid applying `defaultData` here because that will overwrite
+    // existing user input when the parent returns a minimal object after save.
+    if (!initial) return
+    setData((prev: any) => {
+      const next = { ...prev }
+      Object.keys(initial).forEach((k) => {
+        const v = (initial as any)[k]
+        if (v && typeof v === 'object' && !Array.isArray(v)) {
+          next[k] = { ...(prev[k] || {}), ...v }
+        } else {
+          next[k] = v
+        }
+      })
+      return next
+    })
     setAdditionalReps(initial?.additionalReps ? initial.additionalReps : [])
     // sync additional CNAEs desc if provided
     if (initial?.additionalCnaes) {
       setAdditionalCnaes(initial.additionalCnaes.map((a: any) => a.code || ''))
       setAdditionalCnaesDesc(initial.additionalCnaes.map((a: any) => a.descricao || ''))
     }
-  }, [mergedInitial, initial])
+  }, [initial])
 
   // try to load existing uploaded file for this qualification (when reloading the page)
   React.useEffect(() => {

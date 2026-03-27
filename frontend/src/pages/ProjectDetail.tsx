@@ -30,6 +30,7 @@ const ProjectDetail: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [qualification, setQualification] = useState<any | null>(null)
   const [capacity, setCapacity] = useState<any | null>(null)
+  const [strategy, setStrategy] = useState<any | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [tab, setTab] = useState(0)
 
@@ -49,6 +50,10 @@ const ProjectDetail: React.FC = () => {
             try {
               const c = await (await import('../services/project.service')).getCapacity(id)
               setCapacity(c ?? null)
+              try {
+                const s = await (await import('../services/project.service')).getStrategy(id)
+                setStrategy(s?.data ?? s ?? null)
+              } catch (e) {}
             } catch (e) {}
         } catch (e) {
           // ignore qualification load errors
@@ -134,9 +139,10 @@ const ProjectDetail: React.FC = () => {
                 }
               }} />
             ) : i === 1 ? (
-              <EstrategiaForm initial={undefined} projectId={id} projectName={project?.name} onSave={async (data) => {
+              <EstrategiaForm initial={strategy ?? undefined} projectId={id} projectName={project?.name} onSave={async (data) => {
                 try {
-                  console.log('Estratégia saved (simulado)', data)
+                  // `data` is the saved resource returned by the form
+                  setStrategy(data?.data ?? data)
                   setToast({ type: 'success', message: 'Estratégia salva' })
                   return data
                 } catch (e) {

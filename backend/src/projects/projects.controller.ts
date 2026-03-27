@@ -90,6 +90,18 @@ export class ProjectsController {
     }
   }
 
+  @Get(':id/strategy')
+  async getStrategy(@Param('id') id: string) {
+    try {
+      const s = await this.projectsService.getStrategy(id)
+      if (!s) return null
+      return s
+    } catch (e) {
+      this.logger.error(`getStrategy failed for project=${id}: ${e}`)
+      throw new InternalServerErrorException('Failed to load strategy data')
+    }
+  }
+
   @Roles('ADMIN')
   @Post()
   async create(@Body() body: any, @CurrentUser() user: JwtPayload) {
@@ -230,6 +242,42 @@ export class ProjectsController {
     } catch (e) {
       this.logger.error(`saveCapacity failed for project=${id}: ${e}`)
       throw new InternalServerErrorException('Failed to save capacity data')
+    }
+  }
+
+  @Put(':id/strategy')
+  async saveStrategy(@Param('id') id: string, @Body() dto: any, @CurrentUser() user: JwtPayload) {
+    let actor = await this.resolveActor((user as any)?.sub)
+    if (!actor) {
+      const uAny = user as any
+      const hasMaster =
+        (Array.isArray(uAny?.realm_access?.roles) && uAny.realm_access.roles.includes('MASTER')) ||
+        (Array.isArray(uAny?.roles) && uAny.roles.includes('MASTER')) ||
+        (uAny?.resource_access && typeof uAny.resource_access === 'object' &&
+          Object.values(uAny.resource_access).some((entry: any) => Array.isArray(entry.roles) && entry.roles.includes('MASTER')))
+      const hasAdmin =
+        (Array.isArray(uAny?.realm_access?.roles) && uAny.realm_access.roles.includes('ADMIN')) ||
+        (Array.isArray(uAny?.roles) && uAny.roles.includes('ADMIN')) ||
+        (uAny?.resource_access && typeof uAny.resource_access === 'object' &&
+          Object.values(uAny.resource_access).some((entry: any) => Array.isArray(entry.roles) && entry.roles.includes('ADMIN')))
+
+      if (!hasMaster && !hasAdmin) throw new NotFoundException('Local user not found for current principal')
+
+      actor = {
+        id: null as any,
+        keycloakId: user.sub,
+        username: uAny?.preferred_username ?? uAny?.username ?? null,
+        email: uAny?.email ?? null,
+        tenantId: uAny?.tenant_id ?? uAny?.tenantId ?? null,
+        role: hasMaster ? Role.MASTER : Role.ADMIN,
+      } as unknown as User
+    }
+
+    try {
+      return await this.projectsService.saveStrategy(id, dto, actor as any)
+    } catch (e) {
+      this.logger.error(`saveStrategy failed for project=${id}: ${e}`)
+      throw new InternalServerErrorException('Failed to save strategy data')
     }
   }
 

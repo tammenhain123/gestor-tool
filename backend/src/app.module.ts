@@ -22,8 +22,10 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath:
+      envFilePath: [
         process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'prod' ? '.env.prod' : '.env.dev',
+        '.env',
+      ],
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],

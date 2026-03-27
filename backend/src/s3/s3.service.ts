@@ -16,14 +16,34 @@ export class S3Service {
 
     this.logger.log(`S3 client config - bucket=${this.bucket} region=${process.env.S3_REGION} endpoint=${endpointVar ?? 'default'}`)
 
-    this.client = new S3Client({
+    // Validate and normalize credentials from env
+    const rawAccessKey = typeof process.env.AWS_ACCESS_KEY_ID === 'string' ? process.env.AWS_ACCESS_KEY_ID.trim() : undefined
+    const rawSecret = typeof process.env.AWS_SECRET_ACCESS_KEY === 'string' ? process.env.AWS_SECRET_ACCESS_KEY.trim() : undefined
+    const rawSession = typeof process.env.AWS_SESSION_TOKEN === 'string' ? process.env.AWS_SESSION_TOKEN.trim() : undefined
+
+    const credsProvided = !!(rawAccessKey && rawSecret)
+    if (!credsProvided) this.logger.warn('AWS credentials not fully provided via env; falling back to default credential provider chain')
+
+    const clientOpts: any = {
       region: process.env.S3_REGION,
       endpoint: endpointVar || undefined,
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-      },
-    })
+    }
+
+    if (credsProvided) {
+      // Basic sanity checks
+      if (!rawAccessKey || rawAccessKey.length < 4 || !rawSecret || rawSecret.length < 8) {
+        this.logger.error('AWS credentials appear invalid (too short) — do not use empty strings')
+        throw new Error('Invalid AWS credentials provided via environment')
+      }
+      clientOpts.credentials = {
+        accessKeyId: rawAccessKey,
+        secretAccessKey: rawSecret,
+        ...(rawSession ? { sessionToken: rawSession } : {}),
+      }
+      this.logger.log(`Using AWS credentials from env (accessKeyId length=${rawAccessKey.length})`)
+    }
+
+    this.client = new S3Client(clientOpts)
   }
 
   async uploadBuffer(key: string, buffer: Buffer, contentType?: string) {

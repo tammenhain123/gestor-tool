@@ -6,6 +6,7 @@ import { Project } from './project.entity'
 import { Qualification } from './qualification.entity'
 import { ProjectFile } from './file.entity'
 import { Capacity } from './capacity.entity'
+import { Strategy } from './strategy.entity'
 import { BankEntry } from './bank-entry.entity'
 import { Asset } from './asset.entity'
 import { FinancialDoc } from './financial-doc.entity'
@@ -17,7 +18,7 @@ import { ProjectFilesController } from './files.controller'
 import { ProjectFilesService } from './files.service'
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Project, User, Company, Qualification, ProjectFile, BankEntry, Asset, FinancialDoc, Capacity]), UsersModule, S3Module],
+  imports: [TypeOrmModule.forFeature([Project, User, Company, Qualification, ProjectFile, BankEntry, Asset, FinancialDoc, Capacity, Strategy]), UsersModule, S3Module],
   providers: [ProjectsService, ProjectFilesService],
   controllers: [ProjectsController, ProjectFilesController],
   exports: [ProjectsService],

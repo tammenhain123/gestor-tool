@@ -49,6 +49,11 @@ export async function getCapacity(projectId: string): Promise<any> {
   return res.data
 }
 
+export async function getStrategy(projectId: string): Promise<any> {
+  const res = await api.get<any>(`${BASE}/${projectId}/strategy`)
+  return res.data
+}
+
 export async function saveQualification(projectId: string, payload: any): Promise<any> {
   const res = await api.put<any>(`${BASE}/${projectId}/qualification`, payload)
   return res.data
@@ -56,6 +61,11 @@ export async function saveQualification(projectId: string, payload: any): Promis
 
 export async function saveCapacity(projectId: string, payload: any): Promise<any> {
   const res = await api.put<any>(`${BASE}/${projectId}/capacity`, payload)
+  return res.data
+}
+
+export async function saveStrategy(projectId: string, payload: any): Promise<any> {
+  const res = await api.put<any>(`${BASE}/${projectId}/strategy`, payload)
   return res.data
 }
 

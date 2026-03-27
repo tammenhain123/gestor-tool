@@ -4,6 +4,7 @@ import { Repository, In } from 'typeorm'
 import { Project, ProjectType } from './project.entity'
 import { Qualification } from './qualification.entity'
 import { Capacity } from './capacity.entity'
+import { Strategy } from './strategy.entity'
 import { BankEntry } from './bank-entry.entity'
 import { Asset } from './asset.entity'
 import { FinancialDoc } from './financial-doc.entity'
@@ -21,10 +22,17 @@ export class ProjectsService {
     @InjectRepository(Company) private readonly companyRepo: Repository<Company>,
     @InjectRepository(Qualification) private readonly qualRepo: Repository<Qualification>,
     @InjectRepository(Capacity) private readonly capacityRepo: Repository<Capacity>,
+    @InjectRepository(Strategy) private readonly strategyRepo: Repository<Strategy>,
     @InjectRepository(BankEntry) private readonly bankRepo: Repository<BankEntry>,
     @InjectRepository(Asset) private readonly assetRepo: Repository<Asset>,
     @InjectRepository(FinancialDoc) private readonly docRepo: Repository<FinancialDoc>,
   ) {}
+
+  // NOTE: Encoding/repair helpers removed. The service will no longer
+  // attempt automatic re-interpretation of string bytes (latin1/binary→utf8)
+  // because that can corrupt already-correct UTF-8 text. If you still
+  // need an offline repair for already-corrupted DB rows, run a one-off
+  // migration script instead of doing runtime conversions here.
 
   async getQualification(projectId: string): Promise<any | null> {
     const q = await this.qualRepo.findOne({ where: { project: { id: projectId } }, relations: ['project'] })
@@ -105,17 +113,19 @@ export class ProjectsService {
   }
 
   async findAll(): Promise<Project[]> {
-    return this.repo.find({ relations: ['company', 'creator', 'users'] })
+    const rows = await this.repo.find({ relations: ['company', 'creator', 'users'] })
+    return rows
   }
 
   async findAllByCompany(tenantId: string): Promise<Project[]> {
-    return this.repo
+    const rows = await this.repo
       .createQueryBuilder('project')
       .leftJoinAndSelect('project.company', 'company')
       .leftJoinAndSelect('project.creator', 'creator')
       .leftJoinAndSelect('project.users', 'users')
       .where('company.id = :tenantId', { tenantId })
       .getMany()
+    return rows
   }
 
   async findAllForMember(userId: string): Promise<Project[]> {
@@ -132,7 +142,8 @@ export class ProjectsService {
   }
 
   async findOne(id: string): Promise<Project | null> {
-    return this.repo.findOne({ where: { id }, relations: ['company', 'creator', 'users'] })
+    const p = await this.repo.findOne({ where: { id }, relations: ['company', 'creator', 'users'] })
+    return p
   }
 
   async getCapacity(projectId: string): Promise<any | null> {
@@ -147,6 +158,42 @@ export class ProjectsService {
       bens: assets,
       docs,
     }
+  }
+
+  async getStrategy(projectId: string): Promise<any | null> {
+    const s = await this.strategyRepo.findOne({ where: { project: { id: projectId } }, relations: ['project'] })
+    return s ?? null
+  }
+
+  async saveStrategy(projectId: string, payload: any, actor: User | null): Promise<any> {
+    const project = await this.findOne(projectId)
+    if (!project) throw new NotFoundException('Project not found')
+
+    let s = await this.strategyRepo.findOne({ where: { project: { id: projectId } }, relations: ['project'] })
+    // sanitize payload strings to avoid invalid-UTF8 byte sequences and
+    // preserve accent characters in a normalized form
+    const sanitizeStrings = (v: any): any => {
+      if (v === null || v === undefined) return v
+      if (typeof v === 'string') return v.normalize ? v.normalize('NFC') : v
+      if (Array.isArray(v)) return v.map((x) => sanitizeStrings(x))
+      if (typeof v === 'object') {
+        const out: any = {}
+        for (const k of Object.keys(v)) out[k] = sanitizeStrings((v as any)[k])
+        return out
+      }
+      return v
+    }
+
+    const sanitized = sanitizeStrings(payload)
+
+    if (!s) {
+      s = this.strategyRepo.create({ project, data: sanitized })
+    } else {
+      s.data = sanitized
+    }
+
+    const saved = await this.strategyRepo.save(s)
+    return saved
   }
 
   async saveCapacity(projectId: string, payload: any, actor: User | null): Promise<any> {
@@ -189,45 +236,9 @@ export class ProjectsService {
       saved = await this.capacityRepo.save(cap)
     } catch (e) {
       this.logger.error(`capacityRepo.save failed for project=${projectId}: ${e}`)
-      // If the error seems related to invalid UTF8 bytes, attempt a best-effort repair
-      const msg = (e && typeof (e as any).message === 'string') ? String((e as any).message) : ''
-      if (msg.includes('invalid byte sequence') || msg.includes('invalid input')) {
-        try {
-          const sanitizeLatin1 = (v: any): any => {
-            if (v === null || v === undefined) return v
-            if (typeof v === 'string') {
-              try {
-                // interpret the JS string as ISO-8859-1 bytes and decode to UTF-8
-                const repaired = Buffer.from(v, 'binary').toString('utf8')
-                return repaired.normalize ? repaired.normalize('NFC') : repaired
-              } catch (e) {
-                return v
-              }
-            }
-            if (Array.isArray(v)) return v.map((x) => sanitizeLatin1(x))
-            if (typeof v === 'object') {
-              const out: any = {}
-              for (const k of Object.keys(v)) out[k] = sanitizeLatin1((v as any)[k])
-              return out
-            }
-            return v
-          }
-
-          const repairedData = sanitizeLatin1(cap.data)
-          const asJson2 = JSON.stringify(repairedData)
-          this.logger.log(`Retrying capacity.save with repaired payload size=${asJson2.length}`)
-          this.logger.debug(`repaired payload hex prefix: ${Buffer.from(asJson2, 'utf8').slice(0, 32).toString('hex')}`)
-          // try saving repaired payload
-          cap.data = repairedData
-          saved = await this.capacityRepo.save(cap)
-          this.logger.log(`capacity.save succeeded after repair for project=${projectId}`)
-        } catch (e2) {
-          this.logger.error(`capacityRepo.save retry failed for project=${projectId}: ${e2}`)
-          throw e
-        }
-      } else {
-        throw e
-      }
+      // Do not attempt automatic latin1->utf8 conversion here; it can corrupt
+      // correctly encoded text. Surface the error so callers can inspect payloads.
+      throw e
     }
 
     const capacityId = saved.id
@@ -319,7 +330,8 @@ export class ProjectsService {
       project.users = users
     }
 
-    // sanitize string fields to avoid invalid UTF-8 byte sequences
+    // sanitize string fields (normalize only). Do not perform automatic
+    // latin1->utf8 conversions that reinterpret bytes.
     const sanitizeStrings = (v: any): any => {
       if (v === null || v === undefined) return v
       if (typeof v === 'string') return v.normalize ? v.normalize('NFC') : v
@@ -336,44 +348,9 @@ export class ProjectsService {
     project.description = sanitizeStrings(project.description)
     project.imageUrl = sanitizeStrings(project.imageUrl)
 
-    try {
-      return await this.repo.save(project)
-    } catch (e) {
-      const msg = (e && typeof (e as any).message === 'string') ? String((e as any).message) : ''
-      if (msg.includes('invalid byte sequence') || msg.includes('invalid input')) {
-        try {
-          const sanitizeLatin1 = (v: any): any => {
-            if (v === null || v === undefined) return v
-            if (typeof v === 'string') {
-              try {
-                const repaired = Buffer.from(v, 'binary').toString('utf8')
-                return repaired.normalize ? repaired.normalize('NFC') : repaired
-              } catch (e) {
-                return v
-              }
-            }
-            if (Array.isArray(v)) return v.map((x) => sanitizeLatin1(x))
-            if (typeof v === 'object') {
-              const out: any = {}
-              for (const k of Object.keys(v)) out[k] = sanitizeLatin1((v as any)[k])
-              return out
-            }
-            return v
-          }
-
-          project.name = sanitizeLatin1(project.name)
-          project.description = sanitizeLatin1(project.description)
-          project.imageUrl = sanitizeLatin1(project.imageUrl)
-          const saved = await this.repo.save(project)
-          this.logger.log('Project.save succeeded after repair')
-          return saved
-        } catch (e2) {
-          this.logger.error(`project.save retry failed: ${e2}`)
-          throw e
-        }
-      }
-      throw e
-    }
+    // Save and surface any encoding-related errors without attempting
+    // automated byte-reinterpretation.
+    return await this.repo.save(project)
   }
 
   async update(id: string, dto: UpdateProjectDto, actor: User): Promise<Project> {
@@ -407,44 +384,7 @@ export class ProjectsService {
     project.description = sanitizeStrings(project.description)
     project.imageUrl = sanitizeStrings(project.imageUrl)
 
-    try {
-      return await this.repo.save(project)
-    } catch (e) {
-      const msg = (e && typeof (e as any).message === 'string') ? String((e as any).message) : ''
-      if (msg.includes('invalid byte sequence') || msg.includes('invalid input')) {
-        try {
-          const sanitizeLatin1 = (v: any): any => {
-            if (v === null || v === undefined) return v
-            if (typeof v === 'string') {
-              try {
-                const repaired = Buffer.from(v, 'binary').toString('utf8')
-                return repaired.normalize ? repaired.normalize('NFC') : repaired
-              } catch (e) {
-                return v
-              }
-            }
-            if (Array.isArray(v)) return v.map((x) => sanitizeLatin1(x))
-            if (typeof v === 'object') {
-              const out: any = {}
-              for (const k of Object.keys(v)) out[k] = sanitizeLatin1((v as any)[k])
-              return out
-            }
-            return v
-          }
-
-          project.name = sanitizeLatin1(project.name)
-          project.description = sanitizeLatin1(project.description)
-          project.imageUrl = sanitizeLatin1(project.imageUrl)
-          const saved = await this.repo.save(project)
-          this.logger.log('Project.save succeeded after repair')
-          return saved
-        } catch (e2) {
-          this.logger.error(`project.save retry failed: ${e2}`)
-          throw e
-        }
-      }
-      throw e
-    }
+    return await this.repo.save(project)
   }
 
   async remove(id: string): Promise<void> {
