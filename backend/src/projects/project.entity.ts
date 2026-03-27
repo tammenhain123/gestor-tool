@@ -35,13 +35,7 @@ export class Project {
   @JoinTable({ name: 'project_users' })
   users?: User[]
 
-  @ManyToMany(() => User)
-  @JoinTable({ name: 'project_admins' })
-  admins?: User[]
-
-  @ManyToMany(() => User)
-  @JoinTable({ name: 'project_viewers' })
-  viewers?: User[]
+  // Note: admins/viewers relations removed — project permissions are managed elsewhere
 
   @CreateDateColumn({ type: 'timestamp with time zone' })
   createdAt!: Date

@@ -105,7 +105,7 @@ export class ProjectsService {
   }
 
   async findAll(): Promise<Project[]> {
-    return this.repo.find({ relations: ['company', 'creator', 'users', 'admins', 'viewers'] })
+    return this.repo.find({ relations: ['company', 'creator', 'users'] })
   }
 
   async findAllByCompany(tenantId: string): Promise<Project[]> {
@@ -114,26 +114,25 @@ export class ProjectsService {
       .leftJoinAndSelect('project.company', 'company')
       .leftJoinAndSelect('project.creator', 'creator')
       .leftJoinAndSelect('project.users', 'users')
-      .leftJoinAndSelect('project.admins', 'admins')
-      .leftJoinAndSelect('project.viewers', 'viewers')
       .where('company.id = :tenantId', { tenantId })
       .getMany()
   }
 
   async findAllForMember(userId: string): Promise<Project[]> {
-    return this.repo
-      .createQueryBuilder('project')
-      .leftJoinAndSelect('project.company', 'company')
-      .leftJoinAndSelect('project.creator', 'creator')
-      .leftJoinAndSelect('project.users', 'users')
-      .leftJoinAndSelect('project.admins', 'admins')
-      .leftJoinAndSelect('project.viewers', 'viewers')
-      .where('users.id = :userId', { userId })
-      .getMany()
+    // Return all projects belonging to the same company (tenant) as the user
+    try {
+      const user = await this.userRepo.findOne({ where: { id: userId }, relations: ['company'] })
+      const tenantId = user?.company?.id ?? (user as any)?.tenantId ?? null
+      if (!tenantId) return []
+      return this.findAllByCompany(tenantId)
+    } catch (e) {
+      this.logger.error(`findAllForMember failed for user=${userId}: ${e}`)
+      return []
+    }
   }
 
   async findOne(id: string): Promise<Project | null> {
-    return this.repo.findOne({ where: { id }, relations: ['company', 'creator', 'users', 'admins', 'viewers'] })
+    return this.repo.findOne({ where: { id }, relations: ['company', 'creator', 'users'] })
   }
 
   async getCapacity(projectId: string): Promise<any | null> {
@@ -320,19 +319,61 @@ export class ProjectsService {
       project.users = users
     }
 
-    if ((dto as any).adminIds && Array.isArray((dto as any).adminIds)) {
-      const adminIds: string[] = (dto as any).adminIds
-      const admins = await this.userRepo.find({ where: { id: In(adminIds) } })
-      project.admins = admins
+    // sanitize string fields to avoid invalid UTF-8 byte sequences
+    const sanitizeStrings = (v: any): any => {
+      if (v === null || v === undefined) return v
+      if (typeof v === 'string') return v.normalize ? v.normalize('NFC') : v
+      if (Array.isArray(v)) return v.map((x) => sanitizeStrings(x))
+      if (typeof v === 'object') {
+        const out: any = {}
+        for (const k of Object.keys(v)) out[k] = sanitizeStrings((v as any)[k])
+        return out
+      }
+      return v
     }
 
-    if ((dto as any).viewerIds && Array.isArray((dto as any).viewerIds)) {
-      const viewerIds: string[] = (dto as any).viewerIds
-      const viewers = await this.userRepo.find({ where: { id: In(viewerIds) } })
-      project.viewers = viewers
-    }
+    project.name = sanitizeStrings(project.name)
+    project.description = sanitizeStrings(project.description)
+    project.imageUrl = sanitizeStrings(project.imageUrl)
 
-    return this.repo.save(project)
+    try {
+      return await this.repo.save(project)
+    } catch (e) {
+      const msg = (e && typeof (e as any).message === 'string') ? String((e as any).message) : ''
+      if (msg.includes('invalid byte sequence') || msg.includes('invalid input')) {
+        try {
+          const sanitizeLatin1 = (v: any): any => {
+            if (v === null || v === undefined) return v
+            if (typeof v === 'string') {
+              try {
+                const repaired = Buffer.from(v, 'binary').toString('utf8')
+                return repaired.normalize ? repaired.normalize('NFC') : repaired
+              } catch (e) {
+                return v
+              }
+            }
+            if (Array.isArray(v)) return v.map((x) => sanitizeLatin1(x))
+            if (typeof v === 'object') {
+              const out: any = {}
+              for (const k of Object.keys(v)) out[k] = sanitizeLatin1((v as any)[k])
+              return out
+            }
+            return v
+          }
+
+          project.name = sanitizeLatin1(project.name)
+          project.description = sanitizeLatin1(project.description)
+          project.imageUrl = sanitizeLatin1(project.imageUrl)
+          const saved = await this.repo.save(project)
+          this.logger.log('Project.save succeeded after repair')
+          return saved
+        } catch (e2) {
+          this.logger.error(`project.save retry failed: ${e2}`)
+          throw e
+        }
+      }
+      throw e
+    }
   }
 
   async update(id: string, dto: UpdateProjectDto, actor: User): Promise<Project> {
@@ -349,27 +390,61 @@ export class ProjectsService {
       project.users = users
     }
 
-    if ((dto as any).adminIds !== undefined) {
-      const adminIds = (dto as any).adminIds
-      if (!adminIds || (Array.isArray(adminIds) && adminIds.length === 0)) {
-        project.admins = []
-      } else if (Array.isArray(adminIds)) {
-        const admins = await this.userRepo.find({ where: { id: In(adminIds) } })
-        project.admins = admins
+    // sanitize before saving to avoid invalid UTF-8 sequences
+    const sanitizeStrings = (v: any): any => {
+      if (v === null || v === undefined) return v
+      if (typeof v === 'string') return v.normalize ? v.normalize('NFC') : v
+      if (Array.isArray(v)) return v.map((x) => sanitizeStrings(x))
+      if (typeof v === 'object') {
+        const out: any = {}
+        for (const k of Object.keys(v)) out[k] = sanitizeStrings((v as any)[k])
+        return out
       }
+      return v
     }
 
-    if ((dto as any).viewerIds !== undefined) {
-      const viewerIds = (dto as any).viewerIds
-      if (!viewerIds || (Array.isArray(viewerIds) && viewerIds.length === 0)) {
-        project.viewers = []
-      } else if (Array.isArray(viewerIds)) {
-        const viewers = await this.userRepo.find({ where: { id: In(viewerIds) } })
-        project.viewers = viewers
-      }
-    }
+    project.name = sanitizeStrings(project.name)
+    project.description = sanitizeStrings(project.description)
+    project.imageUrl = sanitizeStrings(project.imageUrl)
 
-    return this.repo.save(project)
+    try {
+      return await this.repo.save(project)
+    } catch (e) {
+      const msg = (e && typeof (e as any).message === 'string') ? String((e as any).message) : ''
+      if (msg.includes('invalid byte sequence') || msg.includes('invalid input')) {
+        try {
+          const sanitizeLatin1 = (v: any): any => {
+            if (v === null || v === undefined) return v
+            if (typeof v === 'string') {
+              try {
+                const repaired = Buffer.from(v, 'binary').toString('utf8')
+                return repaired.normalize ? repaired.normalize('NFC') : repaired
+              } catch (e) {
+                return v
+              }
+            }
+            if (Array.isArray(v)) return v.map((x) => sanitizeLatin1(x))
+            if (typeof v === 'object') {
+              const out: any = {}
+              for (const k of Object.keys(v)) out[k] = sanitizeLatin1((v as any)[k])
+              return out
+            }
+            return v
+          }
+
+          project.name = sanitizeLatin1(project.name)
+          project.description = sanitizeLatin1(project.description)
+          project.imageUrl = sanitizeLatin1(project.imageUrl)
+          const saved = await this.repo.save(project)
+          this.logger.log('Project.save succeeded after repair')
+          return saved
+        } catch (e2) {
+          this.logger.error(`project.save retry failed: ${e2}`)
+          throw e
+        }
+      }
+      throw e
+    }
   }
 
   async remove(id: string): Promise<void> {

@@ -19,7 +19,7 @@ import { fetchUsers } from '../../services/user.service'
 type Props = {
   open: boolean
   onClose: () => void
-  onSave: (payload: CreateProjectPayload) => Promise<void>
+  onSave: (payload: CreateProjectPayload) => Promise<any>
   project?: any | null
   saving?: boolean
 }
@@ -29,9 +29,9 @@ const ProjectFormModal: React.FC<Props> = ({ open, onClose, onSave, project, sav
   const [type, setType] = useState<'SAAS' | 'OFERTA' | 'DEMANDA'>('SAAS')
   const [description, setDescription] = useState('')
   const [imageUrl, setImageUrl] = useState('')
+  const [imageFile, setImageFile] = useState<File | null>(null)
   const [users, setUsers] = useState<User[]>([])
-  const [adminUsers, setAdminUsers] = useState<User[]>([])
-  const [viewerUsers, setViewerUsers] = useState<User[]>([])
+  // removed admin/viewer lists — no longer captured on project creation
   const [loadingUsers, setLoadingUsers] = useState(false)
 
   useEffect(() => {
@@ -40,17 +40,12 @@ const ProjectFormModal: React.FC<Props> = ({ open, onClose, onSave, project, sav
       setType(project.type || 'SAAS')
       setDescription(project.description || '')
       setImageUrl(project.imageUrl || '')
-      const existingAdmins = (project as any).admins ?? ((project as any).admin ? (Array.isArray((project as any).admin) ? (project as any).admin : [(project as any).admin]) : [])
-      const existingViewers = (project as any).viewers ?? ((project as any).viewer ? (Array.isArray((project as any).viewer) ? (project as any).viewer : [(project as any).viewer]) : [])
-      setAdminUsers(existingAdmins)
-      setViewerUsers(existingViewers)
+      // no-op: admins/viewers removed
     } else {
       setName('')
       setType('SAAS')
       setDescription('')
       setImageUrl('')
-      setAdminUsers([])
-      setViewerUsers([])
     }
   }, [project, open])
 
@@ -68,10 +63,10 @@ const ProjectFormModal: React.FC<Props> = ({ open, onClose, onSave, project, sav
       type,
       description: description?.trim() || undefined,
       imageUrl: imageUrl?.trim() || undefined,
-      adminIds: adminUsers.map((u) => u.id),
-      viewerIds: viewerUsers.map((u) => u.id),
     }
-    await onSave(payload)
+
+    const saved = await onSave(payload)
+    if (!project && saved) onClose()
   }
 
   return (
@@ -91,23 +86,7 @@ const ProjectFormModal: React.FC<Props> = ({ open, onClose, onSave, project, sav
           </FormControl>
 
 
-          <Autocomplete
-            multiple
-            options={users}
-            getOptionLabel={(u) => u.username || u.email || u.id}
-            value={adminUsers}
-            onChange={(_, val) => setAdminUsers(val)}
-            renderInput={(params) => <TextField {...params} label={loadingUsers ? 'Loading users...' : 'Project admins'} />}
-          />
-
-          <Autocomplete
-            multiple
-            options={users}
-            getOptionLabel={(u) => u.username || u.email || u.id}
-            value={viewerUsers}
-            onChange={(_, val) => setViewerUsers(val)}
-            renderInput={(params) => <TextField {...params} label={loadingUsers ? 'Loading users...' : 'Project viewers'} />}
-          />
+          {/* Project admins/viewers removed — no longer requested at creation */}
 
           <Box>
             <Button variant="outlined" component="label">
@@ -119,6 +98,7 @@ const ProjectFormModal: React.FC<Props> = ({ open, onClose, onSave, project, sav
                 onChange={async (e) => {
                   const file = e.target.files?.[0]
                   if (!file) return
+                  setImageFile(file)
                   const reader = new FileReader()
                   reader.onload = () => setImageUrl(reader.result as string)
                   reader.readAsDataURL(file)

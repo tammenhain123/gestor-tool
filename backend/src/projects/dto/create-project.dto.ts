@@ -14,18 +14,7 @@ export class CreateProjectDto {
   @IsOptional()
   @IsString()
   imageUrl?: string
-
-  @IsOptional()
-  @IsArray()
-  @ArrayUnique()
-  @IsUUID('4', { each: true })
-  adminIds?: string[]
-
-  @IsOptional()
-  @IsArray()
-  @ArrayUnique()
-  @IsUUID('4', { each: true })
-  viewerIds?: string[]
+  // adminIds and viewerIds removed — project creation no longer assigns these
 
   @IsEnum(ProjectType)
   type!: ProjectType

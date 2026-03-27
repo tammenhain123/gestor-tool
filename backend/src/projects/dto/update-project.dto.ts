@@ -15,18 +15,7 @@ export class UpdateProjectDto {
 	@IsOptional()
 	@IsString()
 	imageUrl?: string
-
-	@IsOptional()
-	@IsArray()
-	@ArrayUnique()
-	@IsUUID('4', { each: true })
-	adminIds?: string[]
-
-	@IsOptional()
-	@IsArray()
-	@ArrayUnique()
-	@IsUUID('4', { each: true })
-	viewerIds?: string[]
+	// adminIds and viewerIds removed — not used any more
 
 	@IsOptional()
 	@IsEnum(ProjectType)

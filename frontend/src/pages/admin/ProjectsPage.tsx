@@ -96,15 +96,17 @@ const ProjectsPage: React.FC = () => {
   const handleSave = async (payload: any) => {
     try {
       setSaving(true)
+      let result: any = null
       if (selectedProject) {
-        await projectService.updateProject(selectedProject.id, payload)
+        result = await projectService.updateProject(selectedProject.id, payload)
         setToast({ type: 'success', message: t('projects.updated') })
       } else {
-        await projectService.createProject(payload)
+        result = await projectService.createProject(payload)
         setToast({ type: 'success', message: t('projects.created') })
       }
       setModalOpen(false)
       await load()
+      return result
     } catch (err: any) {
       setToast({ type: 'error', message: err?.response?.data?.message || err.message || 'Save failed' })
     } finally { setSaving(false) }

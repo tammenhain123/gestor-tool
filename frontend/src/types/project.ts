@@ -9,17 +9,13 @@ export type Project = {
   company: { id: string; name: string }
   creator: { id: string; username?: string | null }
   users?: { id: string; username?: string | null }[]
-  admin?: { id: string; username?: string | null } | null
-  viewer?: { id: string; username?: string | null } | null
+  // admin/viewer removed from project shape
   createdAt: string
   updatedAt: string
 }
 
 export type CreateProjectPayload = {
   name: string
-  adminId?: string
-  adminIds?: string[]
-  viewerIds?: string[]
   imageUrl?: string
   type: ProjectType
   description?: string

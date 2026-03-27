@@ -16,6 +16,7 @@ import Select from '@mui/material/Select'
 import MenuItem from '@mui/material/MenuItem'
 import FormHelperText from '@mui/material/FormHelperText'
 import { getCnaeClass, lookupCep as lookupCepApi } from '../../utils/apiLookups'
+import { useAuth } from '../../auth/AuthProvider'
 import Accordion from '@mui/material/Accordion'
 import AccordionSummary from '@mui/material/AccordionSummary'
 import AccordionDetails from '@mui/material/AccordionDetails'
@@ -37,6 +38,8 @@ type Props = {
 
 const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propProjectId, projectName: propProjectName }) => {
   const { t } = useTranslation()
+  const { user } = useAuth()
+  const isReadOnly = String(user?.role || '').toUpperCase() === 'USER'
   const [solicType, setSolicType] = useState<'PF' | 'PJ'>(initial?.solicType ?? 'PJ')
   const defaultData = {
     razaoSocial: '',
@@ -89,7 +92,10 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
     }, [uploadedName, uploadedKey, uploadedMeta, data?.contratoFile, data?.contratoName, initial?.contratoName])
 
   React.useEffect(() => {
-    setData(mergedInitial)
+    // Merge incoming initial values with existing state instead of overwriting.
+    // This prevents the form from being reset when the backend returns a
+    // minimal/partial object after save (eg. only `id`).
+    setData((prev: any) => ({ ...prev, ...mergedInitial }))
     setAdditionalReps(initial?.additionalReps ? initial.additionalReps : [])
     // sync additional CNAEs desc if provided
     if (initial?.additionalCnaes) {
@@ -482,11 +488,11 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
     <Box component="form" onSubmit={submit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <Grid container spacing={2}>
         <Grid item xs={12}>
-          <FormControl component="fieldset">
+            <FormControl component="fieldset">
             <FormLabel component="legend">Tipo de Solicitação</FormLabel>
             <RadioGroup row value={solicType} onChange={(e) => setSolicType(e.target.value as any)}>
-              <FormControlLabel value="PF" control={<Radio />} label="Pessoa Física" />
-              <FormControlLabel value="PJ" control={<Radio />} label="Pessoa Jurídica" />
+              <FormControlLabel value="PF" control={<Radio disabled={isReadOnly} />} label="Pessoa Física" disabled={isReadOnly} />
+              <FormControlLabel value="PJ" control={<Radio disabled={isReadOnly} />} label="Pessoa Jurídica" disabled={isReadOnly} />
             </RadioGroup>
           </FormControl>
         </Grid>
@@ -494,23 +500,24 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
         {solicType === 'PJ' && (
           <>
             <Grid item xs={12} md={6}>
-              <TextField label="Razão Social" fullWidth value={data.razaoSocial} onChange={(e) => setPath('razaoSocial', e.target.value)} />
+              <TextField disabled={isReadOnly} label="Razão Social" fullWidth value={data.razaoSocial} onChange={(e) => setPath('razaoSocial', e.target.value)} />
             </Grid>
             <Grid item xs={12} md={6}>
-              <TextField label="Nome Fantasia" required fullWidth value={data.nomeFantasia} onChange={(e) => handleNomeFantasiaChange(e.target.value)} error={!!nomeFantasiaError} helperText={nomeFantasiaError ?? ''} />
+              <TextField disabled={isReadOnly} label="Nome Fantasia" required fullWidth value={data.nomeFantasia} onChange={(e) => handleNomeFantasiaChange(e.target.value)} error={!!nomeFantasiaError} helperText={nomeFantasiaError ?? ''} />
             </Grid>
 
             <Grid item xs={12} md={4}>
               {data.pais === 'Brasil' ? (
-                <TextField label="CNPJ" fullWidth value={data.cnpj} onChange={(e) => handleCnpjChange(e.target.value)} />
+                <TextField disabled={isReadOnly} label="CNPJ" fullWidth value={data.cnpj} onChange={(e) => handleCnpjChange(e.target.value)} />
               ) : (
-                <TextField label="Código da empresa" fullWidth value={data.codigoEmpresa || ''} onChange={(e) => setPath('codigoEmpresa', e.target.value)} />
+                <TextField disabled={isReadOnly} label="Código da empresa" fullWidth value={data.codigoEmpresa || ''} onChange={(e) => setPath('codigoEmpresa', e.target.value)} />
               )}
             </Grid>
             {data.pais === 'Brasil' ? (
               <>
                 <Grid item xs={12} md={4}>
                   <TextField
+                    disabled={isReadOnly}
                     label="CNAE Primário"
                     fullWidth
                     value={data.cnaePrimario}
@@ -522,6 +529,7 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
                 </Grid>
                 <Grid item xs={12} md={4}>
                   <TextField
+                    disabled={isReadOnly}
                     label="CNAE Secundário"
                     fullWidth
                     value={data.cnaeSecundario}
@@ -532,17 +540,17 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
                   />
                 </Grid>
                 <Grid item xs={12} md={8} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Button size="small" variant="outlined" onClick={addAdditionalCnae} startIcon={<AddIcon />}>Adicionar CNAE secundário</Button>
+                  <Button disabled={isReadOnly} size="small" variant="outlined" onClick={addAdditionalCnae} startIcon={<AddIcon />}>Adicionar CNAE secundário</Button>
                 </Grid>
                 {/* additional secondary CNAEs */}
                 {additionalCnaes.map((code, idx) => (
                   <Grid item xs={12} md={12} key={`add-cnae-${idx}`}>
                     <Grid container spacing={1} alignItems="center">
                       <Grid item xs={12} md={5}>
-                        <TextField label={`CNAE Secundário ${idx + 1}`} fullWidth value={code} onChange={(e) => setAdditionalCnaeValue(idx, e.target.value)} onBlur={(e) => lookupAdditionalCnae(idx, e.target.value)} helperText={additionalCnaesErr[idx] ?? additionalCnaesDesc[idx] ?? ''} error={!!additionalCnaesErr[idx]} />
+                        <TextField disabled={isReadOnly} label={`CNAE Secundário ${idx + 1}`} fullWidth value={code} onChange={(e) => setAdditionalCnaeValue(idx, e.target.value)} onBlur={(e) => lookupAdditionalCnae(idx, e.target.value)} helperText={additionalCnaesErr[idx] ?? additionalCnaesDesc[idx] ?? ''} error={!!additionalCnaesErr[idx]} />
                       </Grid>
                       <Grid item>
-                        <IconButton onClick={() => removeAdditionalCnae(idx)}>
+                        <IconButton disabled={isReadOnly} onClick={() => removeAdditionalCnae(idx)}>
                           <DeleteIcon />
                         </IconButton>
                       </Grid>
@@ -574,9 +582,9 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
             )}
 
             {data.pais === 'Brasil' ? (
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth>
-                  <Select value={data.enquadramentoFiscal} onChange={(e) => setPath('enquadramentoFiscal', e.target.value)}>
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth>
+                  <Select disabled={isReadOnly} value={data.enquadramentoFiscal} onChange={(e) => setPath('enquadramentoFiscal', e.target.value)}>
                     <MenuItem value="MEI">MEI</MenuItem>
                     <MenuItem value="Simples Nacional">Simples Nacional</MenuItem>
                     <MenuItem value="Lucro Presumido">Lucro Presumido</MenuItem>
@@ -591,7 +599,7 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
               </Grid>
             )}
             <Grid item xs={12} md={6} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Button variant="outlined" component="label">Anexar Contrato Social
+              <Button disabled={isReadOnly} variant="outlined" component="label">Anexar Contrato Social
                 <input
                   type="file"
                   hidden
@@ -645,25 +653,25 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
             {data.pais === 'Brasil' ? (
               <>
                 <Grid item xs={12} md={2}>
-                  <TextField label="CEP" fullWidth value={data.endereco.cep} onChange={(e) => handleCepChange(e.target.value)} onBlur={(e) => lookupCep(e.target.value, 'endereco')} helperText={cepError ?? ''} error={!!cepError} />
+                  <TextField disabled={isReadOnly} label="CEP" fullWidth value={data.endereco.cep} onChange={(e) => handleCepChange(e.target.value)} onBlur={(e) => lookupCep(e.target.value, 'endereco')} helperText={cepError ?? ''} error={!!cepError} />
                 </Grid>
                 <Grid item xs={12} md={6}>
-                  <TextField label="Endereço" fullWidth value={data.endereco.endereco} onChange={(e) => setPath('endereco.endereco', e.target.value)} />
+                  <TextField disabled={isReadOnly} label="Endereço" fullWidth value={data.endereco.endereco} onChange={(e) => setPath('endereco.endereco', e.target.value)} />
                 </Grid>
                 <Grid item xs={12} md={4}>
-                  <TextField label="Bairro" fullWidth value={data.endereco.bairro} onChange={(e) => setPath('endereco.bairro', e.target.value)} />
+                  <TextField disabled={isReadOnly} label="Bairro" fullWidth value={data.endereco.bairro} onChange={(e) => setPath('endereco.bairro', e.target.value)} />
                 </Grid>
                 <Grid item xs={12} md={2}>
-                  <TextField label="Número" fullWidth value={data.endereco.numero} onChange={(e) => setPath('endereco.numero', e.target.value)} />
+                  <TextField disabled={isReadOnly} label="Número" fullWidth value={data.endereco.numero} onChange={(e) => setPath('endereco.numero', e.target.value)} />
                 </Grid>
                 <Grid item xs={12} md={4}>
-                  <TextField label="Complemento" fullWidth value={data.endereco.complemento} onChange={(e) => setPath('endereco.complemento', e.target.value)} />
+                  <TextField disabled={isReadOnly} label="Complemento" fullWidth value={data.endereco.complemento} onChange={(e) => setPath('endereco.complemento', e.target.value)} />
                 </Grid>
                 <Grid item xs={12} md={4}>
-                  <TextField label="Cidade" fullWidth value={data.endereco.cidade} onChange={(e) => setPath('endereco.cidade', e.target.value)} />
+                  <TextField disabled={isReadOnly} label="Cidade" fullWidth value={data.endereco.cidade} onChange={(e) => setPath('endereco.cidade', e.target.value)} />
                 </Grid>
                 <Grid item xs={12} md={4}>
-                  <TextField label="Estado" fullWidth value={data.endereco.estado} onChange={(e) => setPath('endereco.estado', e.target.value)} />
+                  <TextField disabled={isReadOnly} label="Estado" fullWidth value={data.endereco.estado} onChange={(e) => setPath('endereco.estado', e.target.value)} />
                 </Grid>
               </>
             ) : (
@@ -672,7 +680,7 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
                   <div style={{ visibility: 'hidden', height: 0 }} />
                 </Grid>
                 <Grid item xs={12} md={10}>
-                  <TextField label="Endereço completo" fullWidth value={data.endereco.enderecoCompleto || ''} onChange={(e) => setPath('endereco.enderecoCompleto', e.target.value)} />
+                  <TextField disabled={isReadOnly} label="Endereço completo" fullWidth value={data.endereco.enderecoCompleto || ''} onChange={(e) => setPath('endereco.enderecoCompleto', e.target.value)} />
                 </Grid>
               </>
             )}
@@ -681,32 +689,32 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
               <Paper variant="outlined" sx={{ p: 2 }}>
                 <Typography variant="subtitle1">Representante Legal</Typography>
                 <Grid container spacing={2} sx={{ mt: 1 }}>
-                  <Grid item xs={12} md={6}>
-                    <TextField label="Nome do Representante" fullWidth value={data.representante.nome} onChange={(e) => setPath('representante.nome', e.target.value)} />
+                    <Grid item xs={12} md={6}>
+                    <TextField disabled={isReadOnly} label="Nome do Representante" fullWidth value={data.representante.nome} onChange={(e) => setPath('representante.nome', e.target.value)} />
                   </Grid>
                   {data.representante.pais === 'Brasil' ? (
                     <Grid item xs={12} md={3}>
-                      <TextField label="CPF" fullWidth value={data.representante.cpf} onChange={(e) => handleCpfChange(e.target.value)} />
+                      <TextField disabled={isReadOnly} label="CPF" fullWidth value={data.representante.cpf} onChange={(e) => handleCpfChange(e.target.value)} />
                     </Grid>
                   ) : (
                     <Grid item xs={12} md={3}><div style={{ visibility: 'hidden', height: 0 }} /></Grid>
                   )}
                   <Grid item xs={12} md={3}>
-                    <TextField label="Cargo" fullWidth value={data.representante.cargo} onChange={(e) => setPath('representante.cargo', e.target.value)} />
+                    <TextField disabled={isReadOnly} label="Cargo" fullWidth value={data.representante.cargo} onChange={(e) => setPath('representante.cargo', e.target.value)} />
                   </Grid>
 
                   <Grid item xs={12} md={3}>
-                    <TextField label="Telefone" fullWidth value={data.representante.telefone} onChange={(e) => setPath('representante.telefone', e.target.value)} />
+                    <TextField disabled={isReadOnly} label="Telefone" fullWidth value={data.representante.telefone} onChange={(e) => setPath('representante.telefone', e.target.value)} />
                   </Grid>
                   <Grid item xs={12} md={3}>
-                    <TextField label="Whatsapp" fullWidth value={data.representante.whatsapp} onChange={(e) => setPath('representante.whatsapp', e.target.value)} />
+                    <TextField disabled={isReadOnly} label="Whatsapp" fullWidth value={data.representante.whatsapp} onChange={(e) => setPath('representante.whatsapp', e.target.value)} />
                   </Grid>
                   <Grid item xs={12} md={6}>
-                    <TextField label="E-mail" fullWidth value={data.representante.email} onChange={(e) => setPath('representante.email', e.target.value)} />
+                    <TextField disabled={isReadOnly} label="E-mail" fullWidth value={data.representante.email} onChange={(e) => setPath('representante.email', e.target.value)} />
                   </Grid>
 
                   <Grid item xs={12} md={3}>
-                    <Select fullWidth value={data.representante.pais} onChange={(e) => setPath('representante.pais', e.target.value)}>
+                    <Select disabled={isReadOnly} fullWidth value={data.representante.pais} onChange={(e) => setPath('representante.pais', e.target.value)}>
                       <MenuItem value="Brasil">Brasil</MenuItem>
                       <MenuItem value="EUA">EUA</MenuItem>
                       <MenuItem value="China">China</MenuItem>
@@ -718,25 +726,25 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
                   {data.representante.pais === 'Brasil' ? (
                     <>
                       <Grid item xs={12} md={2}>
-                        <TextField label="CEP" fullWidth value={data.representante.endereco.cep} onChange={(e) => handleCepRepChange(e.target.value)} onBlur={(e) => lookupCep(e.target.value, 'representante.endereco')} helperText={cepErrorRep ?? ''} error={!!cepErrorRep} />
+                        <TextField disabled={isReadOnly} label="CEP" fullWidth value={data.representante.endereco.cep} onChange={(e) => handleCepRepChange(e.target.value)} onBlur={(e) => lookupCep(e.target.value, 'representante.endereco')} helperText={cepErrorRep ?? ''} error={!!cepErrorRep} />
                       </Grid>
                       <Grid item xs={12} md={6}>
-                        <TextField label="Endereço" fullWidth value={data.representante.endereco.endereco} onChange={(e) => setPath('representante.endereco.endereco', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Endereço" fullWidth value={data.representante.endereco.endereco} onChange={(e) => setPath('representante.endereco.endereco', e.target.value)} />
                       </Grid>
                       <Grid item xs={12} md={4}>
-                        <TextField label="Bairro" fullWidth value={data.representante.endereco.bairro} onChange={(e) => setPath('representante.endereco.bairro', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Bairro" fullWidth value={data.representante.endereco.bairro} onChange={(e) => setPath('representante.endereco.bairro', e.target.value)} />
                       </Grid>
                       <Grid item xs={12} md={2}>
-                        <TextField label="Número" fullWidth value={data.representante.endereco.numero} onChange={(e) => setPath('representante.endereco.numero', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Número" fullWidth value={data.representante.endereco.numero} onChange={(e) => setPath('representante.endereco.numero', e.target.value)} />
                       </Grid>
                       <Grid item xs={12} md={4}>
-                        <TextField label="Complemento" fullWidth value={data.representante.endereco.complemento} onChange={(e) => setPath('representante.endereco.complemento', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Complemento" fullWidth value={data.representante.endereco.complemento} onChange={(e) => setPath('representante.endereco.complemento', e.target.value)} />
                       </Grid>
                       <Grid item xs={12} md={4}>
-                        <TextField label="Cidade" fullWidth value={data.representante.endereco.cidade} onChange={(e) => setPath('representante.endereco.cidade', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Cidade" fullWidth value={data.representante.endereco.cidade} onChange={(e) => setPath('representante.endereco.cidade', e.target.value)} />
                       </Grid>
                       <Grid item xs={12} md={4}>
-                        <TextField label="Estado" fullWidth value={data.representante.endereco.estado} onChange={(e) => setPath('representante.endereco.estado', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Estado" fullWidth value={data.representante.endereco.estado} onChange={(e) => setPath('representante.endereco.estado', e.target.value)} />
                       </Grid>
                     </>
                   ) : (
@@ -754,7 +762,7 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
             </Grid>
 
             <Grid item xs={12} sx={{ mt: 1 }}>
-              <Button startIcon={<AddIcon />} variant="outlined" onClick={addRepresentative}>Adicionar representante legal</Button>
+              <Button disabled={isReadOnly} startIcon={<AddIcon />} variant="outlined" onClick={addRepresentative}>Adicionar representante legal</Button>
             </Grid>
 
             {/* Additional representatives accordion list */}
@@ -763,38 +771,38 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
                 <Accordion defaultExpanded>
                   <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                     <Typography>Representante Adicional {idx + 1}</Typography>
-                    <IconButton edge="end" onClick={(e) => { e.stopPropagation(); removeRepresentative(idx); }} sx={{ ml: 2 }}>
+                    <IconButton disabled={isReadOnly} edge="end" onClick={(e) => { e.stopPropagation(); removeRepresentative(idx); }} sx={{ ml: 2 }}>
                       <DeleteIcon />
                     </IconButton>
                   </AccordionSummary>
                   <AccordionDetails>
                     <Grid container spacing={2}>
                       <Grid item xs={12} md={6}>
-                        <TextField label="Nome do Representante" fullWidth value={rep.nome} onChange={(e) => setAdditionalRepField(idx, 'nome', e.target.value)} />
-                      </Grid>
+                        <TextField disabled={isReadOnly} label="Nome do Representante" fullWidth value={rep.nome} onChange={(e) => setAdditionalRepField(idx, 'nome', e.target.value)} />
+                        </Grid>
                       {rep.pais === 'Brasil' ? (
                         <Grid item xs={12} md={3}>
-                          <TextField label="CPF" fullWidth value={rep.cpf} onChange={(e) => handleAdditionalCpfChange(idx, e.target.value)} />
+                          <TextField disabled={isReadOnly} label="CPF" fullWidth value={rep.cpf} onChange={(e) => handleAdditionalCpfChange(idx, e.target.value)} />
                         </Grid>
                       ) : (
                         <Grid item xs={12} md={3}><div style={{ visibility: 'hidden', height: 0 }} /></Grid>
                       )}
                       <Grid item xs={12} md={3}>
-                        <TextField label="Cargo" fullWidth value={rep.cargo} onChange={(e) => setAdditionalRepField(idx, 'cargo', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Cargo" fullWidth value={rep.cargo} onChange={(e) => setAdditionalRepField(idx, 'cargo', e.target.value)} />
                       </Grid>
 
                       <Grid item xs={12} md={3}>
-                        <TextField label="Telefone" fullWidth value={rep.telefone} onChange={(e) => setAdditionalRepField(idx, 'telefone', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Telefone" fullWidth value={rep.telefone} onChange={(e) => setAdditionalRepField(idx, 'telefone', e.target.value)} />
                       </Grid>
                       <Grid item xs={12} md={3}>
-                        <TextField label="Whatsapp" fullWidth value={rep.whatsapp} onChange={(e) => setAdditionalRepField(idx, 'whatsapp', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Whatsapp" fullWidth value={rep.whatsapp} onChange={(e) => setAdditionalRepField(idx, 'whatsapp', e.target.value)} />
                       </Grid>
                       <Grid item xs={12} md={6}>
-                        <TextField label="E-mail" fullWidth value={rep.email} onChange={(e) => setAdditionalRepField(idx, 'email', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="E-mail" fullWidth value={rep.email} onChange={(e) => setAdditionalRepField(idx, 'email', e.target.value)} />
                       </Grid>
 
                       <Grid item xs={12} md={3}>
-                        <Select fullWidth value={rep.pais} onChange={(e) => setAdditionalRepField(idx, 'pais', e.target.value)}>
+                        <Select disabled={isReadOnly} fullWidth value={rep.pais} onChange={(e) => setAdditionalRepField(idx, 'pais', e.target.value)}>
                           <MenuItem value="Brasil">Brasil</MenuItem>
                           <MenuItem value="EUA">EUA</MenuItem>
                           <MenuItem value="China">China</MenuItem>
@@ -806,25 +814,25 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
                       {rep.pais === 'Brasil' ? (
                         <>
                           <Grid item xs={12} md={2}>
-                            <TextField label="CEP" fullWidth value={rep.endereco.cep} onChange={(e) => handleAdditionalCepChange(idx, e.target.value)} onBlur={(e) => lookupCepForAdditional(idx, e.target.value)} />
+                            <TextField disabled={isReadOnly} label="CEP" fullWidth value={rep.endereco.cep} onChange={(e) => handleAdditionalCepChange(idx, e.target.value)} onBlur={(e) => lookupCepForAdditional(idx, e.target.value)} />
                           </Grid>
                           <Grid item xs={12} md={6}>
-                            <TextField label="Endereço" fullWidth value={rep.endereco.endereco} onChange={(e) => setAdditionalRepField(idx, 'endereco.endereco', e.target.value)} />
+                            <TextField disabled={isReadOnly} label="Endereço" fullWidth value={rep.endereco.endereco} onChange={(e) => setAdditionalRepField(idx, 'endereco.endereco', e.target.value)} />
                           </Grid>
                           <Grid item xs={12} md={4}>
-                            <TextField label="Bairro" fullWidth value={rep.endereco.bairro} onChange={(e) => setAdditionalRepField(idx, 'endereco.bairro', e.target.value)} />
+                            <TextField disabled={isReadOnly} label="Bairro" fullWidth value={rep.endereco.bairro} onChange={(e) => setAdditionalRepField(idx, 'endereco.bairro', e.target.value)} />
                           </Grid>
                           <Grid item xs={12} md={2}>
-                            <TextField label="Número" fullWidth value={rep.endereco.numero} onChange={(e) => setAdditionalRepField(idx, 'endereco.numero', e.target.value)} />
+                            <TextField disabled={isReadOnly} label="Número" fullWidth value={rep.endereco.numero} onChange={(e) => setAdditionalRepField(idx, 'endereco.numero', e.target.value)} />
                           </Grid>
                           <Grid item xs={12} md={4}>
-                            <TextField label="Complemento" fullWidth value={rep.endereco.complemento} onChange={(e) => setAdditionalRepField(idx, 'endereco.complemento', e.target.value)} />
+                            <TextField disabled={isReadOnly} label="Complemento" fullWidth value={rep.endereco.complemento} onChange={(e) => setAdditionalRepField(idx, 'endereco.complemento', e.target.value)} />
                           </Grid>
                           <Grid item xs={12} md={4}>
-                            <TextField label="Cidade" fullWidth value={rep.endereco.cidade} onChange={(e) => setAdditionalRepField(idx, 'endereco.cidade', e.target.value)} />
+                            <TextField disabled={isReadOnly} label="Cidade" fullWidth value={rep.endereco.cidade} onChange={(e) => setAdditionalRepField(idx, 'endereco.cidade', e.target.value)} />
                           </Grid>
                           <Grid item xs={12} md={4}>
-                            <TextField label="Estado" fullWidth value={rep.endereco.estado} onChange={(e) => setAdditionalRepField(idx, 'endereco.estado', e.target.value)} />
+                            <TextField disabled={isReadOnly} label="Estado" fullWidth value={rep.endereco.estado} onChange={(e) => setAdditionalRepField(idx, 'endereco.estado', e.target.value)} />
                           </Grid>
                         </>
                       ) : (
@@ -833,7 +841,7 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
                             <div style={{ visibility: 'hidden', height: 0 }} />
                           </Grid>
                           <Grid item xs={12} md={9}>
-                            <TextField label="Endereço completo" fullWidth value={rep.endereco.enderecoCompleto || ''} onChange={(e) => setAdditionalRepField(idx, 'endereco.enderecoCompleto', e.target.value)} />
+                            <TextField disabled={isReadOnly} label="Endereço completo" fullWidth value={rep.endereco.enderecoCompleto || ''} onChange={(e) => setAdditionalRepField(idx, 'endereco.enderecoCompleto', e.target.value)} />
                           </Grid>
                         </>
                       )}
@@ -844,14 +852,14 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
             ))}
 
             <Grid item xs={12}>
-              <Button variant="contained" type="submit">Salvar Qualificação</Button>
+              <Button disabled={isReadOnly} variant="contained" type="submit">Salvar Qualificação</Button>
             </Grid>
           </>
         )}
         {solicType === 'PF' && (
           <>
             <Grid item xs={12} md={6}>
-              <TextField label="Nome Fantasia" required fullWidth value={data.nomeFantasia} onChange={(e) => handleNomeFantasiaChange(e.target.value)} error={!!nomeFantasiaError} helperText={nomeFantasiaError ?? ''} />
+              <TextField disabled={isReadOnly} label="Nome Fantasia" required fullWidth value={data.nomeFantasia} onChange={(e) => handleNomeFantasiaChange(e.target.value)} error={!!nomeFantasiaError} helperText={nomeFantasiaError ?? ''} />
             </Grid>
 
           
@@ -861,31 +869,31 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
                 <Typography variant="subtitle1">Representante Legal</Typography>
                 <Grid container spacing={2} sx={{ mt: 1 }}>
                   <Grid item xs={12} md={6}>
-                    <TextField label="Nome do Representante" fullWidth value={data.representante.nome} onChange={(e) => setPath('representante.nome', e.target.value)} />
+                    <TextField disabled={isReadOnly} label="Nome do Representante" fullWidth value={data.representante.nome} onChange={(e) => setPath('representante.nome', e.target.value)} />
                   </Grid>
                   {data.representante.pais === 'Brasil' ? (
                     <Grid item xs={12} md={3}>
-                      <TextField label="CPF" fullWidth value={data.representante.cpf} onChange={(e) => handleCpfChange(e.target.value)} />
+                      <TextField disabled={isReadOnly} label="CPF" fullWidth value={data.representante.cpf} onChange={(e) => handleCpfChange(e.target.value)} />
                     </Grid>
                   ) : (
                     <Grid item xs={12} md={3}><div style={{ visibility: 'hidden', height: 0 }} /></Grid>
                   )}
                   <Grid item xs={12} md={3}>
-                    <TextField label="Cargo" fullWidth value={data.representante.cargo} onChange={(e) => setPath('representante.cargo', e.target.value)} />
+                    <TextField disabled={isReadOnly} label="Cargo" fullWidth value={data.representante.cargo} onChange={(e) => setPath('representante.cargo', e.target.value)} />
                   </Grid>
 
                   <Grid item xs={12} md={3}>
-                    <TextField label="Telefone" fullWidth value={data.representante.telefone} onChange={(e) => setPath('representante.telefone', e.target.value)} />
+                    <TextField disabled={isReadOnly} label="Telefone" fullWidth value={data.representante.telefone} onChange={(e) => setPath('representante.telefone', e.target.value)} />
                   </Grid>
                   <Grid item xs={12} md={3}>
-                    <TextField label="Whatsapp" fullWidth value={data.representante.whatsapp} onChange={(e) => setPath('representante.whatsapp', e.target.value)} />
+                    <TextField disabled={isReadOnly} label="Whatsapp" fullWidth value={data.representante.whatsapp} onChange={(e) => setPath('representante.whatsapp', e.target.value)} />
                   </Grid>
                   <Grid item xs={12} md={6}>
-                    <TextField label="E-mail" fullWidth value={data.representante.email} onChange={(e) => setPath('representante.email', e.target.value)} />
+                    <TextField disabled={isReadOnly} label="E-mail" fullWidth value={data.representante.email} onChange={(e) => setPath('representante.email', e.target.value)} />
                   </Grid>
 
                   <Grid item xs={12} md={3}>
-                    <Select fullWidth value={data.representante.pais} onChange={(e) => setPath('representante.pais', e.target.value)}>
+                    <Select disabled={isReadOnly} fullWidth value={data.representante.pais} onChange={(e) => setPath('representante.pais', e.target.value)}>
                       <MenuItem value="Brasil">Brasil</MenuItem>
                       <MenuItem value="EUA">EUA</MenuItem>
                       <MenuItem value="China">China</MenuItem>
@@ -897,25 +905,25 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
                   {data.representante.pais === 'Brasil' ? (
                     <>
                       <Grid item xs={12} md={2}>
-                        <TextField label="CEP" fullWidth value={data.representante.endereco.cep} onChange={(e) => handleCepRepChange(e.target.value)} onBlur={(e) => lookupCep(e.target.value, 'representante.endereco')} helperText={cepErrorRep ?? ''} error={!!cepErrorRep} />
+                        <TextField disabled={isReadOnly} label="CEP" fullWidth value={data.representante.endereco.cep} onChange={(e) => handleCepRepChange(e.target.value)} onBlur={(e) => lookupCep(e.target.value, 'representante.endereco')} helperText={cepErrorRep ?? ''} error={!!cepErrorRep} />
                       </Grid>
                       <Grid item xs={12} md={6}>
-                        <TextField label="Endereço" fullWidth value={data.representante.endereco.endereco} onChange={(e) => setPath('representante.endereco.endereco', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Endereço" fullWidth value={data.representante.endereco.endereco} onChange={(e) => setPath('representante.endereco.endereco', e.target.value)} />
                       </Grid>
                       <Grid item xs={12} md={4}>
-                        <TextField label="Bairro" fullWidth value={data.representante.endereco.bairro} onChange={(e) => setPath('representante.endereco.bairro', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Bairro" fullWidth value={data.representante.endereco.bairro} onChange={(e) => setPath('representante.endereco.bairro', e.target.value)} />
                       </Grid>
                       <Grid item xs={12} md={2}>
-                        <TextField label="Número" fullWidth value={data.representante.endereco.numero} onChange={(e) => setPath('representante.endereco.numero', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Número" fullWidth value={data.representante.endereco.numero} onChange={(e) => setPath('representante.endereco.numero', e.target.value)} />
                       </Grid>
                       <Grid item xs={12} md={4}>
-                        <TextField label="Complemento" fullWidth value={data.representante.endereco.complemento} onChange={(e) => setPath('representante.endereco.complemento', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Complemento" fullWidth value={data.representante.endereco.complemento} onChange={(e) => setPath('representante.endereco.complemento', e.target.value)} />
                       </Grid>
                       <Grid item xs={12} md={4}>
-                        <TextField label="Cidade" fullWidth value={data.representante.endereco.cidade} onChange={(e) => setPath('representante.endereco.cidade', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Cidade" fullWidth value={data.representante.endereco.cidade} onChange={(e) => setPath('representante.endereco.cidade', e.target.value)} />
                       </Grid>
                       <Grid item xs={12} md={4}>
-                        <TextField label="Estado" fullWidth value={data.representante.endereco.estado} onChange={(e) => setPath('representante.endereco.estado', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Estado" fullWidth value={data.representante.endereco.estado} onChange={(e) => setPath('representante.endereco.estado', e.target.value)} />
                       </Grid>
                     </>
                   ) : (
@@ -924,7 +932,7 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
                         <div style={{ visibility: 'hidden', height: 0 }} />
                       </Grid>
                       <Grid item xs={12} md={9}>
-                        <TextField label="Endereço completo" fullWidth value={data.representante.endereco.enderecoCompleto || ''} onChange={(e) => setPath('representante.endereco.enderecoCompleto', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Endereço completo" fullWidth value={data.representante.endereco.enderecoCompleto || ''} onChange={(e) => setPath('representante.endereco.enderecoCompleto', e.target.value)} />
                       </Grid>
                     </>
                   )}
@@ -933,7 +941,7 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
             </Grid>
 
             <Grid item xs={12} sx={{ mt: 1 }}>
-              <Button startIcon={<AddIcon />} variant="outlined" onClick={addRepresentative}>Adicionar representante legal</Button>
+              <Button disabled={isReadOnly} startIcon={<AddIcon />} variant="outlined" onClick={addRepresentative}>Adicionar representante legal</Button>
             </Grid>
 
             {/* Additional representatives accordion list (PF) */}
@@ -942,38 +950,38 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
                 <Accordion defaultExpanded>
                   <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                     <Typography>Representante Adicional {idx + 1}</Typography>
-                    <IconButton edge="end" onClick={(e) => { e.stopPropagation(); removeRepresentative(idx); }} sx={{ ml: 2 }}>
+                    <IconButton disabled={isReadOnly} edge="end" onClick={(e) => { e.stopPropagation(); removeRepresentative(idx); }} sx={{ ml: 2 }}>
                       <DeleteIcon />
                     </IconButton>
                   </AccordionSummary>
                   <AccordionDetails>
                     <Grid container spacing={2}>
                       <Grid item xs={12} md={6}>
-                        <TextField label="Nome do Representante" fullWidth value={rep.nome} onChange={(e) => setAdditionalRepField(idx, 'nome', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Nome do Representante" fullWidth value={rep.nome} onChange={(e) => setAdditionalRepField(idx, 'nome', e.target.value)} />
                       </Grid>
                       {rep.pais === 'Brasil' ? (
                         <Grid item xs={12} md={3}>
-                          <TextField label="CPF" fullWidth value={rep.cpf} onChange={(e) => handleAdditionalCpfChange(idx, e.target.value)} />
+                          <TextField disabled={isReadOnly} label="CPF" fullWidth value={rep.cpf} onChange={(e) => handleAdditionalCpfChange(idx, e.target.value)} />
                         </Grid>
                       ) : (
                         <Grid item xs={12} md={3}><div style={{ visibility: 'hidden', height: 0 }} /></Grid>
                       )}
                       <Grid item xs={12} md={3}>
-                        <TextField label="Cargo" fullWidth value={rep.cargo} onChange={(e) => setAdditionalRepField(idx, 'cargo', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Cargo" fullWidth value={rep.cargo} onChange={(e) => setAdditionalRepField(idx, 'cargo', e.target.value)} />
                       </Grid>
 
                       <Grid item xs={12} md={3}>
-                        <TextField label="Telefone" fullWidth value={rep.telefone} onChange={(e) => setAdditionalRepField(idx, 'telefone', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Telefone" fullWidth value={rep.telefone} onChange={(e) => setAdditionalRepField(idx, 'telefone', e.target.value)} />
                       </Grid>
                       <Grid item xs={12} md={3}>
-                        <TextField label="Whatsapp" fullWidth value={rep.whatsapp} onChange={(e) => setAdditionalRepField(idx, 'whatsapp', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="Whatsapp" fullWidth value={rep.whatsapp} onChange={(e) => setAdditionalRepField(idx, 'whatsapp', e.target.value)} />
                       </Grid>
                       <Grid item xs={12} md={6}>
-                        <TextField label="E-mail" fullWidth value={rep.email} onChange={(e) => setAdditionalRepField(idx, 'email', e.target.value)} />
+                        <TextField disabled={isReadOnly} label="E-mail" fullWidth value={rep.email} onChange={(e) => setAdditionalRepField(idx, 'email', e.target.value)} />
                       </Grid>
 
                       <Grid item xs={12} md={3}>
-                        <Select fullWidth value={rep.pais} onChange={(e) => setAdditionalRepField(idx, 'pais', e.target.value)}>
+                        <Select disabled={isReadOnly} fullWidth value={rep.pais} onChange={(e) => setAdditionalRepField(idx, 'pais', e.target.value)}>
                           <MenuItem value="Brasil">Brasil</MenuItem>
                           <MenuItem value="EUA">EUA</MenuItem>
                           <MenuItem value="China">China</MenuItem>
@@ -985,25 +993,25 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
                       {rep.pais === 'Brasil' ? (
                         <>
                           <Grid item xs={12} md={2}>
-                            <TextField label="CEP" fullWidth value={rep.endereco.cep} onChange={(e) => handleAdditionalCepChange(idx, e.target.value)} onBlur={(e) => lookupCepForAdditional(idx, e.target.value)} />
+                            <TextField disabled={isReadOnly} label="CEP" fullWidth value={rep.endereco.cep} onChange={(e) => handleAdditionalCepChange(idx, e.target.value)} onBlur={(e) => lookupCepForAdditional(idx, e.target.value)} />
                           </Grid>
                           <Grid item xs={12} md={6}>
-                            <TextField label="Endereço" fullWidth value={rep.endereco.endereco} onChange={(e) => setAdditionalRepField(idx, 'endereco.endereco', e.target.value)} />
+                            <TextField disabled={isReadOnly} label="Endereço" fullWidth value={rep.endereco.endereco} onChange={(e) => setAdditionalRepField(idx, 'endereco.endereco', e.target.value)} />
                           </Grid>
                           <Grid item xs={12} md={4}>
-                            <TextField label="Bairro" fullWidth value={rep.endereco.bairro} onChange={(e) => setAdditionalRepField(idx, 'endereco.bairro', e.target.value)} />
+                            <TextField disabled={isReadOnly} label="Bairro" fullWidth value={rep.endereco.bairro} onChange={(e) => setAdditionalRepField(idx, 'endereco.bairro', e.target.value)} />
                           </Grid>
                           <Grid item xs={12} md={2}>
-                            <TextField label="Número" fullWidth value={rep.endereco.numero} onChange={(e) => setAdditionalRepField(idx, 'endereco.numero', e.target.value)} />
+                            <TextField disabled={isReadOnly} label="Número" fullWidth value={rep.endereco.numero} onChange={(e) => setAdditionalRepField(idx, 'endereco.numero', e.target.value)} />
                           </Grid>
                           <Grid item xs={12} md={4}>
-                            <TextField label="Complemento" fullWidth value={rep.endereco.complemento} onChange={(e) => setAdditionalRepField(idx, 'endereco.complemento', e.target.value)} />
+                            <TextField disabled={isReadOnly} label="Complemento" fullWidth value={rep.endereco.complemento} onChange={(e) => setAdditionalRepField(idx, 'endereco.enderecoCompleto', e.target.value)} />
                           </Grid>
                           <Grid item xs={12} md={4}>
-                            <TextField label="Cidade" fullWidth value={rep.endereco.cidade} onChange={(e) => setAdditionalRepField(idx, 'endereco.cidade', e.target.value)} />
+                            <TextField disabled={isReadOnly} label="Cidade" fullWidth value={rep.endereco.cidade} onChange={(e) => setAdditionalRepField(idx, 'endereco.cidade', e.target.value)} />
                           </Grid>
                           <Grid item xs={12} md={4}>
-                            <TextField label="Estado" fullWidth value={rep.endereco.estado} onChange={(e) => setAdditionalRepField(idx, 'endereco.estado', e.target.value)} />
+                            <TextField disabled={isReadOnly} label="Estado" fullWidth value={rep.endereco.estado} onChange={(e) => setAdditionalRepField(idx, 'endereco.estado', e.target.value)} />
                           </Grid>
                         </>
                       ) : (
@@ -1023,12 +1031,12 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
             ))}
 
             <Grid item xs={12}>
-              <Button variant="contained" type="submit">Salvar Qualificação</Button>
+              <Button disabled={isReadOnly} variant="contained" type="submit">Salvar Qualificação</Button>
             </Grid>
           </>
         )}
       </Grid>
-    </Box>
+      </Box>
   )
 }
 

@@ -82,7 +82,7 @@ const ProjectTable: React.FC<Props> = ({ projects, onEdit, onDelete, onOpen, sho
             <TableCell>Type</TableCell>
             <TableCell>Company</TableCell>
             <TableCell>Creator</TableCell>
-            <TableCell>Users</TableCell>
+            {/* Users column removed per request */}
             {showActions && <TableCell align="right">Actions</TableCell>}
           </TableRow>
         </TableHead>
@@ -102,7 +102,7 @@ const ProjectTable: React.FC<Props> = ({ projects, onEdit, onDelete, onOpen, sho
               <TableCell>{p.type}</TableCell>
               <TableCell>{p.company?.name}</TableCell>
               <TableCell>{p.creator?.username || p.creator?.id}</TableCell>
-              <TableCell>{p.users?.length ?? 0}</TableCell>
+              {/* users count removed */}
               <TableCell align="right">
                 {showActions && (
                   <>

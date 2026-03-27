@@ -92,7 +92,13 @@ export class ProjectsController {
 
   @Roles('ADMIN')
   @Post()
-  async create(@Body() dto: CreateProjectDto, @CurrentUser() user: JwtPayload) {
+  async create(@Body() body: any, @CurrentUser() user: JwtPayload) {
+    // Normalize incoming body: accept `type` as string or single-element array
+    if (Array.isArray(body?.type) && body.type.length > 0) body.type = body.type[0]
+
+    // Keep `imageUrl` as provided (including base64 data URIs) — it will be stored directly
+
+    const dto: CreateProjectDto = body as CreateProjectDto
     // if frontend provided creatorId, prefer that
     if ((dto as any).creatorId) {
       const creator = await this.usersService.findOne((dto as any).creatorId)
