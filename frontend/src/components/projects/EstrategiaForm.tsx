@@ -23,7 +23,6 @@ type Props = {
 }
 
 const docKeys = [
-  'extrato',
   'organograma',
   'endividamento',
   'recebiveis',
@@ -41,12 +40,11 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
 
   const [notes, setNotes] = useState<string>(() => initial?.notes || '')
   const [docs, setDocs] = useState<Array<any>>(() => {
-    if (Array.isArray(initial?.docs) && initial.docs.length > 0) return initial.docs.map((d: any, i: number) => ({ ...d, file: null, labelKey: d.labelKey ? d.labelKey : `capacidade.docs.${(docKeys[i] || 'doc' + i)}` }))
-    return docKeys.map((k) => ({ labelKey: `capacidade.docs.${k}`, file: null as File | null, validado: 'nao' as 'sim' | 'nao' }))
+    if (Array.isArray(initial?.docs) && initial.docs.length > 0) return initial.docs.map((d: any, i: number) => ({ ...d, file: null, emissaoDate: d.emissaoDate || d.date || null, labelKey: d.labelKey ? d.labelKey : `capacidade.docs.${(docKeys[i] || 'doc' + i)}` }))
+    return docKeys.map((k) => ({ labelKey: `capacidade.docs.${k}`, file: null as File | null, emissaoDate: null, validado: 'nao' as 'sim' | 'nao' }))
   })
 
-  const [bens, setBens] = useState(() => (Array.isArray(initial?.bens) && initial.bens.length > 0 ? initial.bens : [{ descricao: '', apresentacao: '', matricula: '', valorAtual: '' }]))
-  const [ocupante, setOcupante] = useState(initial?.ocupante ?? { nome: '', cpfCnpj: '', telefone: '' })
+  const [bens, setBens] = useState(() => (Array.isArray(initial?.bens) && initial.bens.length > 0 ? initial.bens : [{ descricao: '', apresentacao: '', matricula: '', valorAtual: '', ocupante: { nome: '', cpfCnpj: '', telefone: '' }, arquivos: { matriculaFile: null as File | null, bciFile: null as File | null, iptuFile: null as File | null } }]))
 
   const setDoc = (index: number, patch: Partial<{ file: File | null; validado: 'sim' | 'nao' }>) => {
     setDocs((prev) => {
@@ -56,7 +54,7 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
     })
   }
 
-  const setBem = (index: number, patch: Partial<{ descricao: string; apresentacao: string; matricula: string; valorAtual: string }>) => {
+  const setBem = (index: number, patch: Partial<{ descricao: string; apresentacao: string; matricula: string; valorAtual: string; ocupante?: any; arquivos?: any }>) => {
     setBens((prev) => {
       const next = prev.slice()
       next[index] = { ...next[index], ...patch }
@@ -64,11 +62,11 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
     })
   }
 
-  const addBem = () => setBens((prev) => [...prev, { descricao: '', apresentacao: '', matricula: '', valorAtual: '' }])
+  const addBem = () => setBens((prev) => [...prev, { descricao: '', apresentacao: '', matricula: '', valorAtual: '', ocupante: { nome: '', cpfCnpj: '', telefone: '' }, arquivos: { matriculaFile: null, bciFile: null, iptuFile: null } }])
 
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault()
-    const payload = { notes, docs, bens, ocupante }
+    const payload = { notes, docs, bens }
 
     const stripFiles = (p: any) => {
       const copy: any = { ...p }
@@ -76,7 +74,17 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
         copy.docs = copy.docs.map((d: any) => ({
           ...d,
           file: undefined,
+          emissaoDate: d.emissaoDate || d.date || undefined,
           originalName: d.originalName || (d.file ? d.file.name : undefined),
+        }))
+      }
+      if (Array.isArray(copy.bens)) {
+        copy.bens = copy.bens.map((b: any) => ({
+          ...b,
+          arquivos: undefined,
+          matriculaFile: undefined,
+          bciFile: undefined,
+          iptuFile: undefined,
         }))
       }
       return copy
@@ -96,15 +104,15 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
         const { presign, saveMetadata } = await import('../../services/file.service')
         const tabName = 'Strategy & Procedure'
 
-        const uploadOne = async (file: File, docObj: any) => {
+        const uploadOne = async (file: File, docObj: any, label?: string) => {
           try {
-            const fieldName = docObj?.labelKey || docObj?.label || undefined
+            const fieldName = label || docObj?.labelKey || docObj?.label || undefined
             const p = await presign(projectIdToUse, file.name, projectName, tabName, fieldName)
             const uploadRes = await fetch(p.url, { method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file })
             if (!uploadRes.ok) throw new Error(`S3 upload failed: ${uploadRes.status}`)
             // include replaceOriginalName hint if an existing doc entry has an originalName
             const replaceHint = docObj?.originalName || docObj?.name || undefined
-            const metaSaved = await saveMetadata(projectIdToUse, { key: p.key, originalName: file.name, mimeType: file.type, size: file.size, replaceOriginalName: replaceHint, labelKey: docObj?.labelKey })
+            const metaSaved = await saveMetadata(projectIdToUse, { key: p.key, originalName: file.name, mimeType: file.type, size: file.size, replaceOriginalName: replaceHint, labelKey: fieldName })
             return metaSaved
           } catch (err) {
             // fallback to backend upload
@@ -134,9 +142,36 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
         for (const d of docs) {
           if (d?.file && d.file instanceof File) uploads.push(uploadOne(d.file, d))
         }
+        // bem files (matricula, bci, iptu)
+        for (let i = 0; i < bens.length; i++) {
+          const bem = bens[i]
+          if (bem?.arquivos?.matriculaFile && bem.arquivos.matriculaFile instanceof File) uploads.push(uploadOne(bem.arquivos.matriculaFile, bem, `estrategia.bem.${i}.matricula`))
+          if (bem?.arquivos?.bciFile && bem.arquivos.bciFile instanceof File) uploads.push(uploadOne(bem.arquivos.bciFile, bem, `estrategia.bem.${i}.bci`))
+          if (bem?.arquivos?.iptuFile && bem.arquivos.iptuFile instanceof File) uploads.push(uploadOne(bem.arquivos.iptuFile, bem, `estrategia.bem.${i}.iptu`))
+        }
 
         const savedMetas = uploads.length ? (await Promise.all(uploads)).filter(Boolean) : []
         const metaByName = new Map(savedMetas.map((m: any) => [m.originalName, m]))
+
+        // apply uploaded metadata to bem files if present
+        const finalBens = (bens || []).map((b: any, idx: number) => {
+          const copy = { ...b }
+          // try to resolve by originalName in savedMetas
+          const applyIfFile = (fileField: string, labelSuffix: string) => {
+            const f = copy.arquivos && copy.arquivos[fileField]
+            if (f && f instanceof File) {
+              const meta = savedMetas.find((m: any) => m.originalName === f.name) || null
+              if (meta) {
+                copy[`${labelSuffix}S3Key`] = meta.s3Key || meta.key
+                copy[`${labelSuffix}OriginalName`] = meta.originalName
+              }
+            }
+          }
+          applyIfFile('matriculaFile', 'matricula')
+          applyIfFile('bciFile', 'bci')
+          applyIfFile('iptuFile', 'iptu')
+          return copy
+        })
 
         const finalPayload = {
           ...(merged || {}),
@@ -144,11 +179,11 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
           docs: (payload.docs || []).map((d: any) => ({
             ...d,
             file: undefined,
+            emissaoDate: d.emissaoDate || d.date || undefined,
             s3Key: d.s3Key || d.key || (d.file ? (metaByName.get(d.file.name)?.s3Key || metaByName.get(d.file.name)?.key) : undefined),
             originalName: d.originalName || d.name || (d.file ? (metaByName.get(d.file.name)?.originalName) : undefined),
           })),
-          bens,
-          ocupante,
+          bens: finalBens,
         }
 
         const saved = await saveStrategy(projectIdToUse, finalPayload)
@@ -216,14 +251,13 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
             console.warn('Error matching files for labelKey', labelKey, e)
           }
 
-          return { ...d, file: null, labelKey, s3Key: match?.s3Key || d.s3Key, originalName: match?.originalName || d.originalName || (d.file ? d.file.name : undefined), createdAt: match?.createdAt || d.createdAt, uploadedBy: match?.uploadedBy || d.uploadedBy }
+          return { ...d, file: null, emissaoDate: d.emissaoDate || d.date || null, labelKey, s3Key: match?.s3Key || d.s3Key, originalName: match?.originalName || d.originalName || (d.file ? d.file.name : undefined), createdAt: match?.createdAt || d.createdAt, uploadedBy: match?.uploadedBy || d.uploadedBy }
         }))
       }
 
       void applyInitialDocs()
 
       if (Array.isArray(initial.bens) && initial.bens.length > 0) setBens(initial.bens)
-      if (initial.ocupante) setOcupante(initial.ocupante)
     } catch (e) {
       console.warn('Failed to sync initial estrategia state', e)
     }
@@ -256,6 +290,13 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
                       <Box sx={{ ml: 1, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         <Typography variant="body2">{d.file?.name || (d as any).originalName || ((d as any).s3Key ? String((d as any).s3Key).split('/').pop() : '')}</Typography>
                       </Box>
+                      <TextField
+                        type="date"
+                        size="small"
+                        value={d.emissaoDate || ''}
+                        onChange={(e) => setDoc(idx, { emissaoDate: e.target.value })}
+                        sx={{ maxWidth: 160 }}
+                      />
                       <Checkbox
                         checked={!!(d.file || d.originalName || (d as any).s3Key || (d as any).key)}
                         onClick={(e) => e.preventDefault()}
@@ -270,7 +311,7 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
                           const uploader = (d.uploadedBy || (d.meta && typeof d.meta === 'object' ? d.meta.uploadedBy : undefined) || 'Desconhecido')
                           const date = d.createdAt ? new Date(d.createdAt).toLocaleString() : ''
                           return `${uploader}${date ? ' — ' + date : ''}`
-                        } catch (e) { return 'Informações do arquivo' }
+                        } catch (e) { return t('file.info') }
                       })()}>
                         <IconButton aria-label="Informações" sx={{ color: 'primary.main', p: 0.5, '& .MuiSvgIcon-root': { fontSize: 20 } }}>
                           <InfoIcon />
@@ -301,6 +342,67 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
                 <Grid item xs={12}>
                   <TextField disabled={isReadOnly} label={t('capacidade.bem.apresentacao')} fullWidth value={b.apresentacao || ''} onChange={(e) => setBem(i, { apresentacao: e.target.value })} multiline rows={3} />
                 </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2">{t('capacidade.ocupante.title')}</Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField disabled={isReadOnly} label={t('capacidade.ocupante.nome')} fullWidth value={(b.ocupante && b.ocupante.nome) || ''} onChange={(e) => setBem(i, { ocupante: { ...(b.ocupante || {}), nome: e.target.value } })} />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <TextField disabled={isReadOnly} label={t('capacidade.ocupante.cpfCnpj')} fullWidth value={(b.ocupante && b.ocupante.cpfCnpj) || ''} onChange={(e) => setBem(i, { ocupante: { ...(b.ocupante || {}), cpfCnpj: e.target.value } })} />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <TextField disabled={isReadOnly} label={t('capacidade.ocupante.telefone')} fullWidth value={(b.ocupante && b.ocupante.telefone) || ''} onChange={(e) => setBem(i, { ocupante: { ...(b.ocupante || {}), telefone: e.target.value } })} />
+                </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2">{t('capacidade.bem.docsTitle')}</Typography>
+                    <Stack spacing={1} sx={{ mt: 1 }}>
+                      {['matricula','bci','iptu'].map((key) => {
+                        const fileField = `${key}File`
+                        const labelKey = `capacidade.bem.${key}`
+                        const originalNameKey = `${key}OriginalName`
+                        const fileObj = (b.arquivos && (b.arquivos as any)[fileField]) || null
+                        const existingName = fileObj?.name || (b as any)[originalNameKey] || ''
+                        return (
+                          <Paper key={key} variant="outlined" sx={{ p: 1, borderRadius: 1 }}>
+                            <Grid container spacing={1} alignItems="center">
+                              <Grid item xs={12} md={4}>
+                                <Typography>{t(String(labelKey))}</Typography>
+                              </Grid>
+                              <Grid item xs={12} md={4} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Button variant="outlined" component="label">{t('estrategia.attach')}
+                                  <input type="file" hidden onChange={(e) => setBem(i, { arquivos: { ...(b.arquivos || {}), [fileField]: e.target.files?.[0] ?? null } })} />
+                                </Button>
+                                <Box sx={{ ml: 1, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  <Typography variant="body2">{existingName}</Typography>
+                                </Box>
+                                <Checkbox
+                                  checked={!!(fileObj || (b as any)[originalNameKey])}
+                                  onClick={(e) => e.preventDefault()}
+                                  sx={{
+                                    '&.Mui-checked': { color: (theme: any) => theme.palette.success.main },
+                                    '& .MuiSvgIcon-root': { fontSize: 20 },
+                                  }}
+                                />
+                                <FilePreview projectId={projectIdToUse || projectId} file={fileObj} fileName={fileObj?.name || (b as any)[originalNameKey] || null} s3Key={(b as any)[`${key}S3Key`] || null} />
+                                <Tooltip title={(() => {
+                                  try {
+                                    const uploader = ( (b as any)[`${key}UploadedBy`] || 'Desconhecido')
+                                    const date = ( (b as any)[`${key}CreatedAt`] ? new Date((b as any)[`${key}CreatedAt`]).toLocaleString() : '' )
+                                    return `${uploader}${date ? ' — ' + date : ''}`
+                                  } catch (e) { return t('file.info') }
+                                })()}>
+                                  <IconButton aria-label="Informações" sx={{ color: 'primary.main', p: 0.5, '& .MuiSvgIcon-root': { fontSize: 20 } }}>
+                                    <InfoIcon />
+                                  </IconButton>
+                                </Tooltip>
+                              </Grid>
+                            </Grid>
+                          </Paper>
+                        )
+                      })}
+                    </Stack>
+                  </Grid>
               </React.Fragment>
             ))}
             <Grid item>
@@ -309,20 +411,7 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
           </Grid>
         </Grid>
 
-        <Grid item xs={12}>
-          <Typography variant="h6">{t('capacidade.ocupante.title')}</Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <TextField disabled={isReadOnly} label={t('capacidade.ocupante.nome')} fullWidth value={ocupante.nome || ''} onChange={(e) => setOcupante((p) => ({ ...p, nome: e.target.value }))} />
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <TextField disabled={isReadOnly} label={t('capacidade.ocupante.cpfCnpj')} fullWidth value={ocupante.cpfCnpj || ''} onChange={(e) => setOcupante((p) => ({ ...p, cpfCnpj: e.target.value }))} />
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <TextField disabled={isReadOnly} label={t('capacidade.ocupante.telefone')} fullWidth value={ocupante.telefone || ''} onChange={(e) => setOcupante((p) => ({ ...p, telefone: e.target.value }))} />
-            </Grid>
-          </Grid>
-        </Grid>
+        
       </Grid>
 
       <Box>

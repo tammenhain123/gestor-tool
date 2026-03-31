@@ -152,6 +152,26 @@ export class ProjectsService {
     const bankEntries = await this.bankRepo.find({ where: { projectId, capacityId } })
     const assets = await this.assetRepo.find({ where: { projectId, capacityId } })
     const docs = await this.docRepo.find({ where: { projectId, capacityId } })
+    try {
+      if (Array.isArray(assets) && assets.length > 0) {
+        const sample = assets[0].descricao
+        if (typeof sample === 'string' && sample.length > 0) {
+          try {
+            const bufUtf8 = Buffer.from(sample, 'utf8')
+            const bufLatin1 = Buffer.from(sample, 'latin1')
+            this.logger.log(`Sample asset.descricao (string): ${sample}`)
+            this.logger.debug(`asset.descricao bytes (utf8 hex prefix): ${bufUtf8.slice(0,64).toString('hex')}`)
+            this.logger.debug(`asset.descricao bytes (latin1 hex prefix): ${bufLatin1.slice(0,64).toString('hex')}`)
+            const reconverted = Buffer.from(bufLatin1).toString('utf8')
+            this.logger.debug(`asset.descricao reconverted latin1->utf8 (string): ${reconverted}`)
+          } catch (e) {
+            this.logger.warn(`Failed to inspect asset.descricao bytes: ${e}`)
+          }
+        }
+      }
+    } catch (e) {
+      // swallow logging errors
+    }
     return {
       ...(cap?.data || {}),
       bankEntries,

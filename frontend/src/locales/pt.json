@@ -39,6 +39,9 @@
     "bem": {
       "descricao": "Descrição do Bem",
       "matricula": "Matrícula / Identificação",
+      "bci": "BCI",
+      "iptu": "IPTU",
+      "docsTitle": "Documentos do bem",
       "valorAtual": "Valor Atual",
       "apresentacao": "Apresentação Física do Bem",
       "addNew": "Adicionar Novo Bem Patrimonial"
@@ -65,6 +68,9 @@
     "docsTitle": "Documentos - Estratégia",
     "attach": "Anexar",
     "saveButton": "Salvar Estratégia"
+  },
+  "file": {
+    "info": "Informações do arquivo"
   },
   "avaliacao": {
     "title": "Avaliação do cenário corporativo",

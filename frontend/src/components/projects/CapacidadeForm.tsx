@@ -239,7 +239,7 @@ const CapacidadeForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
                             const date = be.createdAt ? new Date(be.createdAt).toLocaleString() : ''
                             return `${uploader}${date ? ' — ' + date : ''}`
                           } catch (e) {
-                            return 'Informações do arquivo'
+                            return t('file.info')
                           }
                         })()}>
                           <IconButton aria-label="Informações" sx={{ color: 'primary.main' }}>
@@ -277,10 +277,10 @@ const CapacidadeForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
                           const uploader = d.uploadedBy || (metaObj && metaObj.uploadedBy) || 'Desconhecido'
                           const dateSource = d.createdAt || (metaObj && metaObj.createdAt)
                           const date = dateSource ? new Date(dateSource).toLocaleString() : ''
-                          return `${uploader}${date ? ' — ' + date : ''}`
-                        } catch (e) {
-                          return 'Informações do arquivo'
-                        }
+                            return `${uploader}${date ? ' — ' + date : ''}`
+                          } catch (e) {
+                            return t('file.info')
+                          }
                       })()}>
                         <IconButton aria-label="Informações" sx={{ color: 'primary.main' }}>
                           <InfoIcon fontSize="small" />

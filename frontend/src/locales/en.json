@@ -39,6 +39,9 @@
     "bem": {
       "descricao": "Asset Description",
       "matricula": "Registration / Identification",
+      "bci": "BCI",
+      "iptu": "IPTU",
+      "docsTitle": "Asset Documents",
       "valorAtual": "Current Value",
       "apresentacao": "Physical Presentation of Asset",
       "addNew": "Add New Asset"
@@ -65,8 +68,11 @@
     "docsTitle": "Documents - Strategy",
     "attach": "Attach",
     "saveButton": "Save Strategy"
-  }
-  ,"avaliacao": {
+  },
+  "file": {
+    "info": "File info"
+  },
+  "avaliacao": {
     "title": "Corporate scenario assessment",
     "docsTitle": "Documents - Assessment",
     "attach": "Attach",
