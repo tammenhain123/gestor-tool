@@ -10,7 +10,7 @@
   ,"projects": { "title": "Projetos", "deleted": "Projeto excluído", "created": "Projeto criado", "updated": "Projeto atualizado", "saveFailed": "Falha ao salvar", "deleteFailed": "Falha ao excluir", "deleteConfirm": "Excluir projeto?" }
   ,"diligences": { "title": "Diligências", "created": "Diligência solicitada", "project": "Projeto", "assignee": "Responsável", "start": "Início", "end": "Fim", "description": "Descrição", "create": "Solicitar diligência" },
   "projectDetail": {
-    "tabs": ["Qualificação de Contrato", "Estratégia e procedimento", "Aba 3", "Capacidade Estrutural e Financeira", "Requisitos e Necessidades", "Aba 6", "Aba 7", "Aba 8", "Aba 9"],
+    "tabs": ["Qualificação de Contrato", "Estratégia e procedimento", "Avaliação do cenário corporativo", "Capacidade Estrutural e Financeira", "Requisitos e Necessidades", "Aba 6", "Aba 7", "Aba 8", "Aba 9"],
     "loading": "Carregando...",
     "projectNotFound": "Projeto não encontrado",
     "noImage": "Sem imagem",
@@ -65,6 +65,28 @@
     "docsTitle": "Documentos - Estratégia",
     "attach": "Anexar",
     "saveButton": "Salvar Estratégia"
+  },
+  "avaliacao": {
+    "title": "Avaliação do cenário corporativo",
+    "docsTitle": "Documentos - Avaliação",
+    "attach": "Anexar",
+    "saveButton": "Salvar Avaliação",
+    "yearsTitle": "Anos e demonstrações",
+    "year": "Ano",
+    "addYear": "Adicionar novo ano",
+    "savedSimulated": "Avaliação salva (simulada)",
+    "docs": {
+      "organograma": "Organograma Societário",
+      "apresentacao": "Apresentação Institucional"
+    },
+    "finance": {
+      "balanco": "Balanço Patrimonial",
+      "dre": "DRE",
+      "dmpl": "DMPL",
+      "dfc": "DFC",
+      "relatorio_auditoria": "Relatório de Auditoria",
+      "plano_contas": "Plano de Contas"
+    }
   },
   "dashboard_extra_local": {
     "noProjects": "Nenhum projeto disponível",

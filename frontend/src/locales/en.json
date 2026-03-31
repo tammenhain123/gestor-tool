@@ -10,7 +10,7 @@
   ,"projects": { "title": "Projects", "deleted": "Project deleted", "created": "Project created", "updated": "Project updated", "saveFailed": "Save failed", "deleteFailed": "Delete failed", "deleteConfirm": "Delete project?" }
   ,"diligences": { "title": "Diligences", "created": "Diligence requested", "project": "Project", "assignee": "Assignee", "start": "Start", "end": "End", "description": "Description", "create": "Create Diligence" },
   "projectDetail": {
-    "tabs": ["Qualification", "Strategy & Procedure", "Tab 3", "Structural & Financial Capacity", "Requirements and Needs", "Tab 6", "Tab 7", "Tab 8", "Tab 9"],
+    "tabs": ["Qualification", "Strategy & Procedure", "Corporate scenario assessment", "Structural & Financial Capacity", "Requirements and Needs", "Tab 6", "Tab 7", "Tab 8", "Tab 9"],
     "loading": "Loading...",
     "projectNotFound": "Project not found",
     "noImage": "No image",
@@ -65,6 +65,28 @@
     "docsTitle": "Documents - Strategy",
     "attach": "Attach",
     "saveButton": "Save Strategy"
+  }
+  ,"avaliacao": {
+    "title": "Corporate scenario assessment",
+    "docsTitle": "Documents - Assessment",
+    "attach": "Attach",
+    "saveButton": "Save Assessment",
+    "yearsTitle": "Years and statements",
+    "year": "Year",
+    "addYear": "Add new year",
+    "savedSimulated": "Assessment saved (simulated)",
+    "docs": {
+      "organograma": "Organization Chart",
+      "apresentacao": "Institutional Presentation"
+    },
+    "finance": {
+      "balanco": "Balance Sheet",
+      "dre": "Income Statement (DRE)",
+      "dmpl": "DMPL",
+      "dfc": "Cash Flow Statement",
+      "relatorio_auditoria": "Audit Report",
+      "plano_contas": "Chart of Accounts"
+    }
   }
   ,"dashboard_extra_local": {
     "noProjects": "No projects available",

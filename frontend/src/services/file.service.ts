@@ -1,9 +1,10 @@
 import api from './api'
 
-export async function presign(projectId: string, filename: string, projectName?: string, tabName?: string) {
+export async function presign(projectId: string, filename: string, projectName?: string, tabName?: string, fieldName?: string) {
   const body: any = { filename }
   if (projectName) body.projectName = projectName
   if (tabName) body.tabName = tabName
+  if (fieldName) body.fieldName = fieldName
   const res = await api.post(`/projects/${projectId}/files/presign`, body)
   return res.data as { key: string; url: string }
 }
@@ -13,7 +14,7 @@ export async function list(projectId: string) {
   return res.data as any[]
 }
 
-export async function saveMetadata(projectId: string, payload: { key: string; originalName: string; mimeType?: string; size?: number; uploadedBy?: string; qualificationId?: string; capacityId?: string; companyId?: string }) {
+export async function saveMetadata(projectId: string, payload: { key: string; originalName: string; mimeType?: string; size?: number; uploadedBy?: string; qualificationId?: string; capacityId?: string; companyId?: string; replaceOriginalName?: string; labelKey?: string }) {
   const res = await api.post(`/projects/${projectId}/files/metadata`, payload)
   return res.data
 }

@@ -96,12 +96,15 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
         const { presign, saveMetadata } = await import('../../services/file.service')
         const tabName = 'Strategy & Procedure'
 
-        const uploadOne = async (file: File) => {
+        const uploadOne = async (file: File, docObj: any) => {
           try {
-            const p = await presign(projectIdToUse, file.name, projectName, tabName)
+            const fieldName = docObj?.labelKey || docObj?.label || undefined
+            const p = await presign(projectIdToUse, file.name, projectName, tabName, fieldName)
             const uploadRes = await fetch(p.url, { method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file })
             if (!uploadRes.ok) throw new Error(`S3 upload failed: ${uploadRes.status}`)
-            const metaSaved = await saveMetadata(projectIdToUse, { key: p.key, originalName: file.name, mimeType: file.type, size: file.size })
+            // include replaceOriginalName hint if an existing doc entry has an originalName
+            const replaceHint = docObj?.originalName || docObj?.name || undefined
+            const metaSaved = await saveMetadata(projectIdToUse, { key: p.key, originalName: file.name, mimeType: file.type, size: file.size, replaceOriginalName: replaceHint, labelKey: docObj?.labelKey })
             return metaSaved
           } catch (err) {
             // fallback to backend upload
@@ -110,11 +113,13 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
               fd.append('file', file)
               if (projectName) fd.append('projectName', projectName)
               fd.append('tabName', tabName)
-              const uploadResp = await fetch(`/api/projects/${projectIdToUse}/files`, { method: 'POST', body: fd })
+              if (docObj?.labelKey || docObj?.label) fd.append('fieldName', (docObj?.labelKey || docObj?.label))
+                const uploadResp = await fetch(`/api/projects/${projectIdToUse}/files`, { method: 'POST', body: fd })
               if (!uploadResp.ok) throw new Error('Backend upload failed')
               const json = await uploadResp.json()
               if (json && json.key) {
-                const metaSaved = await saveMetadata(projectIdToUse, { key: json.key, originalName: file.name, mimeType: file.type, size: file.size })
+                const replaceHint = docObj?.originalName || docObj?.name || undefined
+                const metaSaved = await saveMetadata(projectIdToUse, { key: json.key, originalName: file.name, mimeType: file.type, size: file.size, replaceOriginalName: replaceHint, labelKey: docObj?.labelKey })
                 return metaSaved
               }
             } catch (err2) {
@@ -127,7 +132,7 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
         // upload files
         const uploads: Promise<any>[] = []
         for (const d of docs) {
-          if (d?.file && d.file instanceof File) uploads.push(uploadOne(d.file))
+          if (d?.file && d.file instanceof File) uploads.push(uploadOne(d.file, d))
         }
 
         const savedMetas = uploads.length ? (await Promise.all(uploads)).filter(Boolean) : []
@@ -174,9 +179,49 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
   React.useEffect(() => {
     if (!initial) return
     try {
-      if (Array.isArray(initial.docs) && initial.docs.length > 0) {
-        setDocs(initial.docs.map((d: any, i: number) => ({ ...d, file: null, labelKey: d.labelKey ? d.labelKey : `capacidade.docs.${(docKeys[i] || 'doc' + i)}` })))
+      const applyInitialDocs = async () => {
+        if (!Array.isArray(initial.docs) || initial.docs.length === 0) return
+        let files: any[] = []
+        try {
+          if (projectIdToUse) {
+            const { list } = await import('../../services/file.service')
+            files = await list(projectIdToUse)
+          }
+        } catch (e) {
+          console.warn('Failed to list project files for mapping docs', e)
+        }
+
+        setDocs(initial.docs.map((d: any, i: number) => {
+          const labelKey = d.labelKey ? d.labelKey : `capacidade.docs.${(docKeys[i] || 'doc' + i)}`
+
+          // prefer files that were saved with the same labelKey
+          let match: any = null
+          try {
+            const byLabel = files.filter((f) => f.labelKey === labelKey)
+            if (byLabel.length > 0) {
+              byLabel.sort((a, b) => (new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()))
+              match = byLabel[0]
+            } else {
+              // fallback: match by originalName (take newest)
+              const byName = files.filter((f) => f.originalName === d.originalName)
+              if (byName.length > 0) {
+                byName.sort((a, b) => (new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()))
+                match = byName[0]
+              } else {
+                // last resort: exact s3Key
+                match = files.find((f) => f.s3Key === d.s3Key)
+              }
+            }
+          } catch (e) {
+            console.warn('Error matching files for labelKey', labelKey, e)
+          }
+
+          return { ...d, file: null, labelKey, s3Key: match?.s3Key || d.s3Key, originalName: match?.originalName || d.originalName || (d.file ? d.file.name : undefined), createdAt: match?.createdAt || d.createdAt, uploadedBy: match?.uploadedBy || d.uploadedBy }
+        }))
       }
+
+      void applyInitialDocs()
+
       if (Array.isArray(initial.bens) && initial.bens.length > 0) setBens(initial.bens)
       if (initial.ocupante) setOcupante(initial.ocupante)
     } catch (e) {
@@ -208,6 +253,9 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
                       <Button disabled={isReadOnly} variant="contained" color="primary" component="label" sx={{ whiteSpace: 'nowrap', minWidth: 96, color: '#ffffff' }}>{t('estrategia.attach')}
                         <input type="file" hidden onChange={(e) => { if (!isReadOnly) setDoc(idx, { file: e.target.files?.[0] ?? null }) }} />
                       </Button>
+                      <Box sx={{ ml: 1, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <Typography variant="body2">{d.file?.name || (d as any).originalName || ((d as any).s3Key ? String((d as any).s3Key).split('/').pop() : '')}</Typography>
+                      </Box>
                       <Checkbox
                         checked={!!(d.file || d.originalName || (d as any).s3Key || (d as any).key)}
                         onClick={(e) => e.preventDefault()}

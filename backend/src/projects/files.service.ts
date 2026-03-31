@@ -19,6 +19,14 @@ export class ProjectFilesService {
     return this.repo.findOne({ where: { projectId, qualificationId } })
   }
 
+  async findByOriginalName(projectId: string, originalName: string) {
+    return this.repo.findOne({ where: { projectId, originalName } })
+  }
+
+  async findByLabelKey(projectId: string, labelKey: string) {
+    return this.repo.findOne({ where: { projectId, labelKey } })
+  }
+
   async findByCapacity(projectId: string, capacityId: string) {
     return this.repo.findOne({ where: { projectId, capacityId } })
   }
@@ -31,6 +39,9 @@ export class ProjectFilesService {
   }
 
   async listByProject(projectId: string) {
+    // Return all files for the project ordered by creation time (newest first).
+    // Do not de-duplicate here — callers expect files associated with specific
+    // label keys / fields to be present individually.
     return this.repo.find({ where: { projectId }, order: { createdAt: 'DESC' } })
   }
 

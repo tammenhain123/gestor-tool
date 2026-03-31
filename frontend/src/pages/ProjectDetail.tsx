@@ -16,6 +16,7 @@ import { Project } from '../types/project'
 import CapacidadeForm from '../components/projects/CapacidadeForm'
 import EstrategiaForm from '../components/projects/EstrategiaForm'
 import RequisitosForm from '../components/projects/RequisitosForm'
+import AvaliacaoCenarioForm from '../components/projects/AvaliacaoCenarioForm'
 import QualificationForm from '../components/projects/QualificationForm'
 import { useTranslation } from 'react-i18next'
 
@@ -148,6 +149,17 @@ const ProjectDetail: React.FC = () => {
                 } catch (e) {
                   console.error(e)
                   setToast({ type: 'error', message: 'Erro ao salvar estratégia' })
+                  throw e
+                }
+              }} />
+            ) : i === 2 ? (
+              <AvaliacaoCenarioForm initial={undefined} projectId={id} projectName={project?.name} onSave={async (data) => {
+                try {
+                  setToast({ type: 'success', message: 'Avaliação salva' })
+                  return data
+                } catch (e) {
+                  console.error(e)
+                  setToast({ type: 'error', message: 'Erro ao salvar avaliação' })
                   throw e
                 }
               }} />

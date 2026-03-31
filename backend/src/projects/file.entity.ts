@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn } from 'typeorm'
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm'
 
 @Entity({ name: 'project_files' })
 export class ProjectFile {
@@ -32,6 +32,12 @@ export class ProjectFile {
   @Column({ nullable: true })
   companyId?: string
 
+  @Column({ nullable: true })
+  labelKey?: string
+
   @CreateDateColumn()
   createdAt!: Date
+
+  @UpdateDateColumn()
+  updatedAt!: Date
 }
