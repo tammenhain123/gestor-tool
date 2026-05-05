@@ -18,6 +18,7 @@ import EstrategiaForm from '../components/projects/EstrategiaForm'
 import RequisitosForm from '../components/projects/RequisitosForm'
 import AvaliacaoCenarioForm from '../components/projects/AvaliacaoCenarioForm'
 import QualificationForm from '../components/projects/QualificationForm'
+import IndicadoresForm from '../components/projects/IndicadoresForm'
 import { useTranslation } from 'react-i18next'
 
 const TabPanel: React.FC<{ children?: React.ReactNode; value: number; index: number }> = ({ children, value, index }) => {
@@ -184,6 +185,17 @@ const ProjectDetail: React.FC = () => {
               }} />
             ) : i === 4 ? (
               <RequisitosForm onSave={(data) => { console.log('Requisitos saved', data); alert('Requisitos salvos (simulado)') }} />
+            ) : i === 5 ? (
+              <IndicadoresForm initial={undefined} projectId={id} projectName={project?.name} onSave={async (data) => {
+                try {
+                  setToast({ type: 'success', message: 'Indicadores salvos' })
+                  return data
+                } catch (e) {
+                  console.error(e)
+                  setToast({ type: 'error', message: 'Erro ao salvar indicadores' })
+                }
+                return data
+              }} />
             ) : (
               <Box component="form" onSubmit={(e) => { e.preventDefault(); handleSave(i) }} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <TextField label={`Texto da aba ${i + 1}`} value={forms[i].text} onChange={(e) => handleFormChange(i, { text: e.target.value })} multiline />

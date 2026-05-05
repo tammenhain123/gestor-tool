@@ -27,13 +27,12 @@ type Props = {
 }
 
 const docKeys = [
-  'extrato',
-  'organograma',
   'endividamento',
+  'scr_bacen',
   'recebiveis',
   'estoque',
   'ativo',
-  'aluguels_recebiveis'
+  'alienacao'
 ]
 
 const CapacidadeForm: React.FC<Props> = ({ initial, onSave, projectId, projectName }) => {
@@ -44,7 +43,6 @@ const CapacidadeForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
   const projectIdToUse = projectId || initial?.projectId || undefined
   const { t } = useTranslation()
   const [bankEntries, setBankEntries] = useState<any[]>(() => (Array.isArray(initial?.bankEntries) && initial.bankEntries.length > 0 ? initial.bankEntries.map((b: any) => ({ ...b, file: null })) : [{ banco: '', numeroConta: '', agencia: '', ano: '', mes: '', file: null }]))
-  const [bens, setBens] = useState(() => (Array.isArray(initial?.bens) && initial.bens.length > 0 ? initial.bens : [{ descricao: '', apresentacao: '', matricula: '', valorAtual: '' }]));
   const [ocupante, setOcupante] = useState(initial?.ocupante ?? { nome: '', cpfCnpj: '', telefone: '' });
 
   const setDoc = (index: number, patch: Partial<{ file: File | null; validado: 'sim' | 'nao' }>) => {
@@ -55,19 +53,11 @@ const CapacidadeForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
     })
   }
 
-  const setBem = (index: number, patch: Partial<{ descricao: string; apresentacao: string; matricula: string; valorAtual: string }>) => {
-    setBens((prev) => {
-      const next = prev.slice()
-      next[index] = { ...next[index], ...patch }
-      return next
-    })
-  }
-
-  const addBem = () => setBens((prev) => [...prev, { descricao: '', apresentacao: '', matricula: '', valorAtual: '' }])
+  // bens removed per UI change
 
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault()
-    const payload = { docs, bens, ocupante, bankEntries }
+    const payload = { docs, ocupante, bankEntries }
     // If projectId provided, save to backend qualification (merge with existing)
     if (projectIdToUse) {
       try {
@@ -91,12 +81,13 @@ const CapacidadeForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
         const { presign, saveMetadata } = await import('../../services/file.service')
         const tabName = 'Capacidade Estrutural e Financeira'
 
-        const uploadOne = async (file: File) => {
+        const uploadOne = async (file: File, label?: string) => {
           try {
-            const p = await presign(projectIdToUse, file.name, projectName, tabName)
+            const fieldName = label || undefined
+            const p = await presign(projectIdToUse, file.name, projectName, tabName, fieldName)
             const uploadRes = await fetch(p.url, { method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file })
             if (!uploadRes.ok) throw new Error(`S3 upload failed: ${uploadRes.status}`)
-            const metaSaved = await saveMetadata(projectIdToUse, { key: p.key, originalName: file.name, mimeType: file.type, size: file.size, capacityId })
+            const metaSaved = await saveMetadata(projectIdToUse, { key: p.key, originalName: file.name, mimeType: file.type, size: file.size, capacityId, labelKey: fieldName })
             return metaSaved
           } catch (err) {
             // fallback to backend upload
@@ -105,11 +96,12 @@ const CapacidadeForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
               fd.append('file', file)
               if (projectName) fd.append('projectName', projectName)
               fd.append('tabName', tabName)
+              if (label) fd.append('fieldName', label)
               const uploadResp = await fetch(`/api/projects/${projectIdToUse}/files`, { method: 'POST', body: fd })
               if (!uploadResp.ok) throw new Error('Backend upload failed')
               const json = await uploadResp.json()
                 if (json && json.key) {
-                const metaSaved = await saveMetadata(projectIdToUse, { key: json.key, originalName: file.name, mimeType: file.type, size: file.size, capacityId })
+                const metaSaved = await saveMetadata(projectIdToUse, { key: json.key, originalName: file.name, mimeType: file.type, size: file.size, capacityId, labelKey: label })
                 return metaSaved
               }
             } catch (err2) {
@@ -123,11 +115,12 @@ const CapacidadeForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
         const uploads: Promise<any>[] = []
         // docs
         for (const d of docs) {
-          if (d?.file && d.file instanceof File) uploads.push(uploadOne(d.file))
+          if (d?.file && d.file instanceof File) uploads.push(uploadOne(d.file, d.labelKey))
         }
-        // bank entries
-        for (const b of bankEntries) {
-          if (b?.file && b.file instanceof File) uploads.push(uploadOne(b.file))
+        // bank entries (keep original behavior, but pass a field hint)
+        for (let i = 0; i < bankEntries.length; i++) {
+          const b = bankEntries[i]
+          if (b?.file && b.file instanceof File) uploads.push(uploadOne(b.file, `capacidade.bank.${i}`))
         }
 
         const savedMetas = uploads.length ? (await Promise.all(uploads)).filter(Boolean) : []
@@ -170,7 +163,7 @@ const CapacidadeForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
 
   React.useEffect(() => {
     console.log('CapacidadeForm mounted', { projectId: projectIdToUse, projectName, initial })
-    console.log('Initial docs/bankEntries/bens sample', { docs: docs.slice(0, 5), bankEntries: bankEntries.slice(0, 5), bens: bens.slice(0, 5) })
+    console.log('Initial docs/bankEntries sample', { docs: docs.slice(0, 5), bankEntries: bankEntries.slice(0, 5) })
   }, [])
 
   // synchronize internal state when `initial` is updated from parent
@@ -195,7 +188,6 @@ const CapacidadeForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
         setBankEntries([{ banco: '', numeroConta: '', agencia: '', ano: '', mes: '', file: null }])
       }
 
-      if (Array.isArray(initial.bens) && initial.bens.length > 0) setBens(initial.bens)
       if (initial.ocupante) setOcupante(initial.ocupante)
     } catch (e) {
       console.warn('Failed to sync initial capacity state', e)
@@ -295,28 +287,7 @@ const CapacidadeForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
         })}
       </Grid>
 
-      <Typography variant="h6">{t('capacidade.bensTitle')}</Typography>
-      <Grid container spacing={2}>
-        {bens.map((b, i) => (
-          <React.Fragment key={i}>
-                <Grid item xs={12} md={6}>
-            <TextField label={t('capacidade.bem.descricao')} fullWidth value={b.descricao || ''} onChange={(e) => setBem(i, { descricao: e.target.value })} multiline rows={2} />
-              </Grid>
-            <Grid item xs={12} md={3}>
-              <TextField label={t('capacidade.bem.matricula')} fullWidth value={b.matricula || ''} onChange={(e) => setBem(i, { matricula: e.target.value })} />
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <TextField label={t('capacidade.bem.valorAtual')} fullWidth value={b.valorAtual || ''} onChange={(e) => setBem(i, { valorAtual: e.target.value })} />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField label={t('capacidade.bem.apresentacao')} fullWidth value={b.apresentacao || ''} onChange={(e) => setBem(i, { apresentacao: e.target.value })} multiline rows={3} />
-            </Grid>
-          </React.Fragment>
-        ))}
-        <Grid item>
-          <Button variant="text" onClick={addBem}>{t('capacidade.bem.addNew')}</Button>
-        </Grid>
-      </Grid>
+      
 
       <Typography variant="h6">{t('capacidade.ocupante.title')}</Typography>
       <Grid container spacing={2}>

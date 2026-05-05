@@ -10,7 +10,7 @@
   ,"projects": { "title": "Projetos", "deleted": "Projeto excluído", "created": "Projeto criado", "updated": "Projeto atualizado", "saveFailed": "Falha ao salvar", "deleteFailed": "Falha ao excluir", "deleteConfirm": "Excluir projeto?" }
   ,"diligences": { "title": "Diligências", "created": "Diligência solicitada", "project": "Projeto", "assignee": "Responsável", "start": "Início", "end": "Fim", "description": "Descrição", "create": "Solicitar diligência" },
   "projectDetail": {
-    "tabs": ["Qualificação de Contrato", "Estratégia e procedimento", "Avaliação do cenário corporativo", "Capacidade Estrutural e Financeira", "Requisitos e Necessidades", "Aba 6", "Aba 7", "Aba 8", "Aba 9"],
+    "tabs": ["Qualificação de Contrato", "Estratégia e procedimento", "Avaliação do cenário corporativo", "Capacidade Estrutural e Financeira", "Requisitos e Necessidades", "Indicadores de desempenho", "Aba 7", "Aba 8", "Aba 9"],
     "loading": "Carregando...",
     "projectNotFound": "Projeto não encontrado",
     "noImage": "Sem imagem",
@@ -56,11 +56,23 @@
       "extrato": "Extrato Bancário",
       "organograma": "Organograma de Cargos e Funções",
       "endividamento": "Relatório de Endividamento",
+      "scr_bacen": "Relatório SCR - BACEN",
       "recebiveis": "Relatório de Recebíveis",
       "estoque": "Relatório de Estoque",
       "ativo": "Relatório de Ativo",
+      "alienacao": "Relatório de Alienação",
       "aluguels_recebiveis": "Relatório de Aluguéis/Recebíveis"
     }
+  },
+  "indicadores": {
+    "title": "Indicadores de desempenho",
+    "descricao": "Descrição",
+    "startDate": "Data de início",
+    "endDate": "Data final",
+    "date": "Data",
+    "attach": "Anexar",
+    "addReport": "Adicionar relatório",
+    "saveButton": "Salvar Indicadores"
   },
   "estrategia": {
     "title": "Estratégia e procedimento",
@@ -83,8 +95,10 @@
     "savedSimulated": "Avaliação salva (simulada)",
     "docs": {
       "organograma": "Organograma Societário",
+      "faturamento": "Faturamento",
       "apresentacao": "Apresentação Institucional"
     },
+    "reportDate": "Data do relatório",
     "finance": {
       "balanco": "Balanço Patrimonial",
       "dre": "DRE",

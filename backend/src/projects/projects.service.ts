@@ -8,6 +8,7 @@ import { Strategy } from './strategy.entity'
 import { BankEntry } from './bank-entry.entity'
 import { Asset } from './asset.entity'
 import { FinancialDoc } from './financial-doc.entity'
+import { Indicator } from './indicator.entity'
 import { CreateProjectDto } from './dto/create-project.dto'
 import { UpdateProjectDto } from './dto/update-project.dto'
 import { User } from '../users/user.entity'
@@ -26,6 +27,7 @@ export class ProjectsService {
     @InjectRepository(BankEntry) private readonly bankRepo: Repository<BankEntry>,
     @InjectRepository(Asset) private readonly assetRepo: Repository<Asset>,
     @InjectRepository(FinancialDoc) private readonly docRepo: Repository<FinancialDoc>,
+    @InjectRepository(Indicator) private readonly indicatorRepo: Repository<Indicator>,
   ) {}
 
   // NOTE: Encoding/repair helpers removed. The service will no longer
@@ -185,6 +187,11 @@ export class ProjectsService {
     return s ?? null
   }
 
+  async getIndicators(projectId: string): Promise<any[] | null> {
+    const rows = await this.indicatorRepo.find({ where: { projectId } })
+    return rows.map((r) => ({ id: r.id, labelKey: r.labelKey, descricao: r.descricao, date: r.date, s3Key: r.s3Key, originalName: r.originalName, createdAt: r.createdAt, uploadedBy: r.uploadedBy }))
+  }
+
   async saveStrategy(projectId: string, payload: any, actor: User | null): Promise<any> {
     const project = await this.findOne(projectId)
     if (!project) throw new NotFoundException('Project not found')
@@ -214,6 +221,35 @@ export class ProjectsService {
 
     const saved = await this.strategyRepo.save(s)
     return saved
+  }
+
+  async saveIndicators(projectId: string, payload: any, actor: User | null): Promise<any> {
+    const project = await this.findOne(projectId)
+    if (!project) throw new NotFoundException('Project not found')
+
+    // payload expected: { reports: [{ labelKey?, descricao?, date?, s3Key?, originalName? }, ...] }
+    try {
+      if (!Array.isArray(payload?.reports)) return []
+      // replace existing indicators for this project
+      await this.indicatorRepo.delete({ projectId })
+      const items = payload.reports.map((r: any) => this.indicatorRepo.create({
+        projectId,
+        labelKey: r.labelKey || r.key || r.label,
+        descricao: r.descricao || undefined,
+        date: r.date ? new Date(r.date) : undefined,
+        s3Key: r.s3Key || r.key || undefined,
+        originalName: r.originalName || undefined,
+        uploadedBy: r.uploadedBy || undefined,
+      }))
+      if (items.length) {
+        const saved = await this.indicatorRepo.save(items)
+        return saved
+      }
+      return []
+    } catch (e) {
+      this.logger.error(`saveIndicators failed for project=${projectId}: ${e}`)
+      throw e
+    }
   }
 
   async saveCapacity(projectId: string, payload: any, actor: User | null): Promise<any> {

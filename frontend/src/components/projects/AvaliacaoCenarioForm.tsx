@@ -20,7 +20,7 @@ type Props = {
 }
 
 const topDocsKeys = ['organograma', 'apresentacao']
-const financeDocsKeys = ['balanco', 'dre', 'dmpl', 'dfc', 'relatorio_auditoria', 'plano_contas']
+const financeDocsKeys = ['balanco', 'dre', 'dmpl', 'dfc', 'relatorio_auditoria', 'plano_contas', 'faturamento']
 
 const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, projectName }) => {
   const { t } = useTranslation()
@@ -28,16 +28,16 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
   const isReadOnly = String(user?.role || '').toUpperCase() === 'USER'
 
   const [topDocs, setTopDocs] = useState(() => {
-    if (Array.isArray(initial?.topDocs) && initial.topDocs.length > 0) return initial.topDocs.map((d: any, i: number) => ({ ...d, file: null, labelKey: `avaliacao.docs.${topDocsKeys[i] || 'doc' + i}` }))
-    return topDocsKeys.map((k) => ({ labelKey: `avaliacao.docs.${k}`, file: null as File | null }))
+    if (Array.isArray(initial?.topDocs) && initial.topDocs.length > 0) return initial.topDocs.map((d: any, i: number) => ({ ...d, file: null, reportDate: d.reportDate || d.date || null, labelKey: `avaliacao.docs.${topDocsKeys[i] || 'doc' + i}` }))
+    return topDocsKeys.map((k) => ({ labelKey: `avaliacao.docs.${k}`, file: null as File | null, reportDate: null }))
   })
 
   const [years, setYears] = useState(() => {
     if (Array.isArray(initial?.years) && initial.years.length > 0) return initial.years
-    return [ { year: '', docs: financeDocsKeys.map(k => ({ labelKey: `avaliacao.finance.${k}`, file: null as File | null })) } ]
+    return [ { year: '', docs: financeDocsKeys.map(k => ({ labelKey: `avaliacao.finance.${k}`, file: null as File | null, reportDate: null })) } ]
   })
 
-  const setTopDoc = (index: number, patch: Partial<{ file: File | null }>) => {
+  const setTopDoc = (index: number, patch: Partial<{ file: File | null; reportDate?: string | null }>) => {
     setTopDocs((prev) => {
       const next = prev.slice()
       next[index] = { ...next[index], ...patch }
@@ -53,7 +53,7 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
     })
   }
 
-  const addYear = () => setYears((prev) => [...prev, { year: '', docs: financeDocsKeys.map(k => ({ labelKey: `avaliacao.finance.${k}`, file: null as File | null })) }])
+  const addYear = () => setYears((prev) => [...prev, { year: '', docs: financeDocsKeys.map(k => ({ labelKey: `avaliacao.finance.${k}`, file: null as File | null, reportDate: null })) }])
 
   React.useEffect(() => {
     const applyInitialDocs = async () => {
@@ -102,7 +102,7 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
               byLabel.sort((a, b) => (new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()))
               match = byLabel[0]
             }
-            return { labelKey: lk, file: null as File | null, s3Key: match?.s3Key, originalName: match?.originalName }
+            return { labelKey: lk, file: null as File | null, reportDate: match?.reportDate || null, s3Key: match?.s3Key, originalName: match?.originalName }
           })
           setTopDocs(discoveredTop)
         }
@@ -130,8 +130,8 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
               } catch (e) {
                 console.warn('Error matching files for labelKey', labelKey, e)
               }
-              return { ...d, file: null, labelKey, s3Key: match?.s3Key || d.s3Key, originalName: match?.originalName || d.originalName || (d.file ? d.file.name : undefined), createdAt: match?.createdAt || d.createdAt, uploadedBy: match?.uploadedBy || d.uploadedBy }
-            }) : financeDocsKeys.map((k) => ({ labelKey: `avaliacao.finance.${k}`, file: null }))
+              return { ...d, file: null, reportDate: d.reportDate || d.date || null, labelKey, s3Key: match?.s3Key || d.s3Key, originalName: match?.originalName || d.originalName || (d.file ? d.file.name : undefined), createdAt: match?.createdAt || d.createdAt, uploadedBy: match?.uploadedBy || d.uploadedBy }
+            }) : financeDocsKeys.map((k) => ({ labelKey: `avaliacao.finance.${k}`, file: null, reportDate: null }))
           })))
         } else {
           // No initial years: attempt to populate a single year from any avaliacao.finance.* files
@@ -145,7 +145,7 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
                 byLabel.sort((a, b) => (new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()))
                 match = byLabel[0]
               }
-              return { labelKey: lk, file: null as File | null, s3Key: match?.s3Key, originalName: match?.originalName }
+                return { labelKey: lk, file: null as File | null, reportDate: match?.reportDate || null, s3Key: match?.s3Key, originalName: match?.originalName }
             })
             setYears([{ year: '', docs: docsForYear }])
           }
@@ -166,10 +166,10 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
     e?.preventDefault()
     const payload = { topDocs, years }
 
-    const stripFiles = (p: any) => {
+      const stripFiles = (p: any) => {
       const copy: any = { ...p }
-      if (Array.isArray(copy.topDocs)) copy.topDocs = copy.topDocs.map((d: any) => ({ ...d, file: undefined, originalName: d.originalName || (d.file ? d.file.name : undefined) }))
-      if (Array.isArray(copy.years)) copy.years = copy.years.map((y: any) => ({ ...y, docs: Array.isArray(y.docs) ? y.docs.map((d: any) => ({ ...d, file: undefined, originalName: d.originalName || (d.file ? d.file.name : undefined) })) : [] }))
+      if (Array.isArray(copy.topDocs)) copy.topDocs = copy.topDocs.map((d: any) => ({ ...d, file: undefined, reportDate: d.reportDate || d.date || undefined, originalName: d.originalName || (d.file ? d.file.name : undefined) }))
+      if (Array.isArray(copy.years)) copy.years = copy.years.map((y: any) => ({ ...y, docs: Array.isArray(y.docs) ? y.docs.map((d: any) => ({ ...d, file: undefined, reportDate: d.reportDate || d.date || undefined, originalName: d.originalName || (d.file ? d.file.name : undefined) })) : [] }))
       return copy
     }
 
@@ -231,6 +231,7 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
           topDocs: (payload.topDocs || []).map((d: any) => ({
             ...d,
             file: undefined,
+            reportDate: d.reportDate || d.date || undefined,
             s3Key: d.s3Key || (d.file ? (metaByOriginal.get(d.file.name)?.s3Key || metaByOriginal.get(d.file.name)?.key) : undefined),
             originalName: d.originalName || d.name || (d.file ? (metaByOriginal.get(d.file.name)?.originalName) : undefined),
           })),
@@ -239,6 +240,7 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
             docs: (y.docs || []).map((d: any) => ({
               ...d,
               file: undefined,
+              reportDate: d.reportDate || d.date || undefined,
               s3Key: d.s3Key || (d.file ? (metaByOriginal.get(d.file.name)?.s3Key || metaByOriginal.get(d.file.name)?.key) : undefined),
               originalName: d.originalName || d.name || (d.file ? (metaByOriginal.get(d.file.name)?.originalName) : undefined),
             }))
@@ -282,6 +284,13 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
                       <Box sx={{ ml: 1, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         <Typography variant="body2">{d.file?.name || (d as any).originalName || ''}</Typography>
                       </Box>
+                      <TextField
+                        type="date"
+                        size="small"
+                        value={d.reportDate || ''}
+                        onChange={(e) => setTopDoc(idx, { reportDate: e.target.value })}
+                        sx={{ maxWidth: 160 }}
+                      />
                       <Checkbox checked={!!(d.file || (d as any).originalName || (d as any).s3Key || (d as any).key)} onClick={(e) => e.preventDefault()} sx={{ '&.Mui-checked': { color: (theme: any) => theme.palette.success.main }, '& .MuiSvgIcon-root': { fontSize: 20 } }} />
                       <FilePreview projectId={projectId} file={d.file} fileName={d.file?.name || d.originalName || null} s3Key={(d as any).s3Key || (d as any).key || null} />
                     </Box>
@@ -317,6 +326,13 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
                                 <Box sx={{ ml: 1, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   <Typography variant="body2">{d.file?.name || d.originalName || ''}</Typography>
                                 </Box>
+                                <TextField
+                                  type="date"
+                                  size="small"
+                                  value={d.reportDate || ''}
+                                  onChange={(e) => setYear(yi, { docs: y.docs.map((dd: any, k: number) => k === di ? { ...dd, reportDate: e.target.value } : dd) })}
+                                  sx={{ maxWidth: 160 }}
+                                />
                                 <Checkbox checked={!!(d.file || d.originalName || d.s3Key || d.key)} onClick={(e) => e.preventDefault()} sx={{ '&.Mui-checked': { color: (theme: any) => theme.palette.success.main }, '& .MuiSvgIcon-root': { fontSize: 20 } }} />
                                 <FilePreview projectId={projectId} file={d.file} fileName={d.file?.name || d.originalName || null} s3Key={d.s3Key || d.key || null} />
                               </Box>
