@@ -27,6 +27,17 @@ interface BankStatementRowProps {
   index: number;
 }
 
+// Máscara para números de conta (max 20 dígitos)
+const maskAccountNumber = (value: string): string => {
+  return value.replace(/\D/g, "").slice(0, 20);
+};
+
+// Máscara para agência (max 5 dígitos + hífen opcional)
+const maskAgency = (value: string): string => {
+  const cleaned = value.replace(/\D/g, "").slice(0, 5);
+  return cleaned;
+};
+
 const BankStatementRow: React.FC<BankStatementRowProps> = ({
   item,
   onUpdate,
@@ -44,7 +55,16 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
         HTMLInputElement | { name?: string; value: unknown }
       >,
     ) => {
-      onUpdate({ [field]: e.target.value });
+      let value = e.target.value as string;
+
+      // Aplicar máscaras
+      if (field === "numeroConta") {
+        value = maskAccountNumber(value);
+      } else if (field === "agencia") {
+        value = maskAgency(value);
+      }
+
+      onUpdate({ [field]: value });
     };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,10 +80,17 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
   };
 
   const handleValidationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newStatus = e.target.value as "VALIDADO" | "NAO_VALIDADO" | "PENDENTE";
     onUpdate({
-      status: e.target.value as "VALIDADO" | "NAO_VALIDADO" | "PENDENTE",
+      status: newStatus,
+      // Limpar data de validação se mudar status para PENDENTE/NAO_VALIDADO
+      validationDate: newStatus === "VALIDADO" ? item.validationDate : undefined,
+      validator: newStatus === "VALIDADO" ? item.validator : undefined,
     });
   };
+
+  // Verificar se pode editar validação
+  const canEditValidation = item.status === "VALIDADO";
 
   return (
     <Paper sx={{ p: 2, mb: 2, border: "1px solid #e0e0e0" }}>
@@ -78,10 +105,13 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
             onChange={handleChange("banco")}
             disabled={readOnly}
             variant="outlined"
+            required
+            error={!item.banco && item.banco === ""}
+            helperText={!item.banco ? t("compliance.required", "Obrigatório") : ""}
           />
         </Grid>
 
-        {/* Número Conta */}
+        {/* Número Conta - com máscara */}
         <Grid item xs={12} sm={2}>
           <TextField
             fullWidth
@@ -91,10 +121,12 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
             onChange={handleChange("numeroConta")}
             disabled={readOnly}
             variant="outlined"
+            placeholder="Ex: 123456"
+            inputProps={{ maxLength: 20 }}
           />
         </Grid>
 
-        {/* Agência */}
+        {/* Agência - com máscara */}
         <Grid item xs={12} sm={2}>
           <TextField
             fullWidth
@@ -104,6 +136,8 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
             onChange={handleChange("agencia")}
             disabled={readOnly}
             variant="outlined"
+            placeholder="Ex: 1234"
+            inputProps={{ maxLength: 5 }}
           />
         </Grid>
 
@@ -118,6 +152,7 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
             onChange={handleChange("ano")}
             disabled={readOnly}
             variant="outlined"
+            inputProps={{ min: "2000", max: "2099" }}
           />
         </Grid>
 
@@ -180,10 +215,16 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
               label={t("compliance.notValidated", "Não Validado")}
               disabled={readOnly}
             />
+            <FormControlLabel
+              value="PENDENTE"
+              control={<Radio size="small" />}
+              label={t("compliance.pending", "Pendente")}
+              disabled={readOnly}
+            />
           </RadioGroup>
         </Grid>
 
-        {/* Validation date and validator (read-only) */}
+        {/* Validation date - editável quando VALIDADO */}
         <Grid item xs={12} sm={4}>
           <TextField
             fullWidth
@@ -191,20 +232,34 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
             label={t("compliance.validationDate", "Data Validação")}
             type="date"
             value={item.validationDate || ""}
+            onChange={handleChange("validationDate")}
             InputLabelProps={{ shrink: true }}
-            disabled
+            disabled={!canEditValidation || readOnly}
             variant="outlined"
+            helperText={
+              canEditValidation
+                ? t("compliance.validationDateHelper", "Data em que foi validado")
+                : t("compliance.validationDateHelperDisabled", "Marque como 'Validado' para editar")
+            }
           />
         </Grid>
 
+        {/* Validator - editável quando VALIDADO */}
         <Grid item xs={12} sm={4}>
           <TextField
             fullWidth
             size="small"
             label={t("compliance.validator", "Validador")}
             value={item.validator || ""}
-            disabled
+            onChange={handleChange("validator")}
+            disabled={!canEditValidation || readOnly}
             variant="outlined"
+            placeholder="Nome de quem validou"
+            helperText={
+              canEditValidation
+                ? ""
+                : t("compliance.validatorHelperDisabled", "Marque como 'Validado' para editar")
+            }
           />
         </Grid>
 
