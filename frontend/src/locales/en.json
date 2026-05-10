@@ -224,7 +224,22 @@
     "goodSaveError": "Error saving asset",
     "goodDeleted": "Asset deleted",
     "goodDeleteError": "Error deleting asset",
-    "confirmDelete": "Are you sure you want to delete?"
+    "confirmDelete": "Are you sure you want to delete?",
+    "bank": "Bank",
+    "accountNumber": "Account Number",
+    "agency": "Agency",
+    "year": "Year",
+    "month": "Month",
+    "attachButton": "Attach",
+    "validated": "Validated",
+    "notValidated": "Not Validated",
+    "pending": "Pending",
+    "validationDate": "Validation Date",
+    "validator": "Validator",
+    "validationDateHelper": "Date when validated",
+    "validationDateHelperDisabled": "Mark as 'Validated' to edit",
+    "validatorHelperDisabled": "Mark as 'Validated' to edit",
+    "required": "Required"
   },
   "common": {
     "loading": "Loading...",

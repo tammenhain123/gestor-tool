@@ -224,7 +224,22 @@
     "goodSaveError": "Erro ao salvar bem patrimonial",
     "goodDeleted": "Bem patrimonial deletado",
     "goodDeleteError": "Erro ao deletar bem",
-    "confirmDelete": "Tem certeza que deseja deletar?"
+    "confirmDelete": "Tem certeza que deseja deletar?",
+    "bank": "Banco",
+    "accountNumber": "Nº Conta",
+    "agency": "Agência",
+    "year": "Ano",
+    "month": "Mês",
+    "attachButton": "Anexar",
+    "validated": "Validado",
+    "notValidated": "Não Validado",
+    "pending": "Pendente",
+    "validationDate": "Data Validação",
+    "validator": "Validador",
+    "validationDateHelper": "Data em que foi validado",
+    "validationDateHelperDisabled": "Marque como 'Validado' para editar",
+    "validatorHelperDisabled": "Marque como 'Validado' para editar",
+    "required": "Obrigatório"
   },
   "common": {
     "loading": "Carregando...",
