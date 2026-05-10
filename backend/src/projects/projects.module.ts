@@ -23,6 +23,8 @@ import { ComplianceValidationService } from "./compliance-validation.service";
 import { ComplianceValidationController } from "./compliance-validation.controller";
 import { PatrimonialGoodService } from "./patrimonial-good.service";
 import { PatrimonialGoodController } from "./patrimonial-good.controller";
+import { BankEntryService } from "./bank-entry.service";
+import { BankEntryController } from "./bank-entry.controller";
 
 @Module({
   imports: [
@@ -49,12 +51,14 @@ import { PatrimonialGoodController } from "./patrimonial-good.controller";
     ProjectFilesService,
     ComplianceValidationService,
     PatrimonialGoodService,
+    BankEntryService,
   ],
   controllers: [
     ProjectsController,
     ProjectFilesController,
     ComplianceValidationController,
     PatrimonialGoodController,
+    BankEntryController,
   ],
   exports: [ProjectsService],
 })
