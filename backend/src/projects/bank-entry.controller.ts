@@ -8,7 +8,8 @@ import {
   Param,
   UseGuards,
 } from "@nestjs/common";
-import { BankEntryService, CreateBankEntryDto, UpdateBankEntryDto } from "./bank-entry.service";
+import { BankEntryService } from "./bank-entry.service";
+import { CreateBankEntryDto, UpdateBankEntryDto } from "./bank-entry.dto";
 import { BankEntry } from "./bank-entry.entity";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
@@ -27,7 +28,9 @@ export class BankEntryController {
    * Get all bank entries for a project
    */
   @Get(":projectId/bank-entries")
-  async getByProject(@Param("projectId") projectId: string): Promise<BankEntry[]> {
+  async getByProject(
+    @Param("projectId") projectId: string,
+  ): Promise<BankEntry[]> {
     return this.bankEntryService.getByProject(projectId);
   }
 

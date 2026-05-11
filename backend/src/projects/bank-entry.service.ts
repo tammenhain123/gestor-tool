@@ -4,34 +4,7 @@ import { Repository } from "typeorm";
 import { BankEntry, BankStatementStatus } from "./bank-entry.entity";
 import { Project } from "./project.entity";
 import { User } from "../users/user.entity";
-
-export class CreateBankEntryDto {
-  banco!: string;
-  numeroConta?: string;
-  agencia?: string;
-  ano?: string;
-  mes?: string;
-  status?: BankStatementStatus;
-  validationDate?: string;
-  validatorId?: string;
-  originalName?: string;
-  mimeType?: string;
-  size?: number;
-}
-
-export class UpdateBankEntryDto {
-  banco?: string;
-  numeroConta?: string;
-  agencia?: string;
-  ano?: string;
-  mes?: string;
-  status?: BankStatementStatus;
-  validationDate?: string;
-  validatorId?: string;
-  originalName?: string;
-  mimeType?: string;
-  size?: number;
-}
+import { CreateBankEntryDto, UpdateBankEntryDto } from "./bank-entry.dto";
 
 @Injectable()
 export class BankEntryService {
@@ -108,14 +81,18 @@ export class BankEntryService {
 
     // Update fields
     if (payload.banco !== undefined) entry.banco = payload.banco;
-    if (payload.numeroConta !== undefined) entry.numeroConta = payload.numeroConta;
+    if (payload.numeroConta !== undefined)
+      entry.numeroConta = payload.numeroConta;
     if (payload.agencia !== undefined) entry.agencia = payload.agencia;
     if (payload.ano !== undefined) entry.ano = payload.ano;
     if (payload.mes !== undefined) entry.mes = payload.mes;
     if (payload.status !== undefined) entry.status = payload.status;
-    if (payload.validationDate !== undefined) entry.validationDate = payload.validationDate;
-    if (payload.validatorId !== undefined) entry.validatorId = payload.validatorId;
-    if (payload.originalName !== undefined) entry.originalName = payload.originalName;
+    if (payload.validationDate !== undefined)
+      entry.validationDate = payload.validationDate;
+    if (payload.validatorId !== undefined)
+      entry.validatorId = payload.validatorId;
+    if (payload.originalName !== undefined)
+      entry.originalName = payload.originalName;
     if (payload.mimeType !== undefined) entry.mimeType = payload.mimeType;
     if (payload.size !== undefined) entry.size = payload.size;
 
