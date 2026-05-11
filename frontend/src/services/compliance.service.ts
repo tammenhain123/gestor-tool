@@ -203,3 +203,10 @@ export async function saveBankStatement(
     return res.data;
   }
 }
+
+export async function deleteBankStatement(
+  projectId: string,
+  id: string,
+): Promise<void> {
+  await api.delete(`/projects/${projectId}/bank-entries/${id}`);
+}

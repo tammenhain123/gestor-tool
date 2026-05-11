@@ -21,6 +21,7 @@ import {
   updatePatrimonialGood,
   deletePatrimonialGood,
   saveBankStatement,
+  deleteBankStatement,
   getBankStatements,
 } from "../../services/compliance.service";
 import {
@@ -52,6 +53,7 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
   const [bankEntries, setBankEntries] = useState<BankStatement[]>([
     { banco: "", numeroConta: "", agencia: "", ano: "", mes: "" },
   ]);
+  const [deletedBankEntryIds, setDeletedBankEntryIds] = useState<string[]>([]);
 
   // Patrimonial goods
   const [patrimonialGoods, setPatrimonialGoods] = useState<PatrimonialGood[]>(
@@ -169,7 +171,14 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
   };
 
   const deleteBankEntry = (index: number) => {
-    setBankEntries((prev) => prev.filter((_, i) => i !== index));
+    // Track the ID if this entry was already saved to the database
+    setBankEntries((prev) => {
+      const entry = prev[index];
+      if (entry.id) {
+        setDeletedBankEntryIds((ids) => [...ids, entry.id!]);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   // ========== PATRIMONIAL GOOD HANDLERS ==========
@@ -242,6 +251,12 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
       };
 
       await saveCompliance(projectIdToUse, payload);
+
+      // Delete bank entries that were removed
+      for (const id of deletedBankEntryIds) {
+        await deleteBankStatement(projectIdToUse, id);
+      }
+      setDeletedBankEntryIds([]); // Clear the deleted IDs after processing
 
       // Save bank entries
       for (const entry of bankEntries) {
