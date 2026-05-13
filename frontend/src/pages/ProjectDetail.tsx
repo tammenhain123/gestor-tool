@@ -13,13 +13,12 @@ import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 import { getProject } from "../services/project.service";
 import { Project } from "../types/project";
-import CapacidadeForm from "../components/projects/CapacidadeForm";
+import CapacidadeForm from "../components/projects/capacidade/CapacidadeForm";
 import EstrategiaForm from "../components/projects/EstrategiaForm";
 import RequisitosForm from "../components/projects/RequisitosForm";
 import AvaliacaoCenarioForm from "../components/projects/AvaliacaoCenarioForm";
 import QualificationForm from "../components/projects/QualificationForm";
 import IndicadoresForm from "../components/projects/IndicadoresForm";
-import ComplianceForm from "../components/compliance/ComplianceForm";
 import { useTranslation } from "react-i18next";
 
 const TabPanel: React.FC<{
@@ -256,7 +255,7 @@ const ProjectDetail: React.FC = () => {
                 }}
               />
             ) : i === 3 ? (
-              <ComplianceForm projectId={id} projectName={project?.name} />
+              <CapacidadeForm projectId={id} projectName={project?.name} />
             ) : i === 4 ? (
               <RequisitosForm
                 onSave={(data) => {

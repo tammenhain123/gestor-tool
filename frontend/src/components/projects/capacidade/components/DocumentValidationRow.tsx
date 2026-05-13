@@ -3,20 +3,23 @@ import Box from "@mui/material/Box";
 import Checkbox from "@mui/material/Checkbox";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
 import Radio from "@mui/material/Radio";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import RadioGroup from "@mui/material/RadioGroup";
-import Stack from "@mui/material/Stack";
 import Grid from "@mui/material/Grid";
 import Paper from "@mui/material/Paper";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
-import { DocumentItem, ComplianceDocumentStatus } from "../../types/compliance";
+import DeleteIcon from "@mui/icons-material/Delete";
+import { DocumentItem } from "../../../../types/compliance";
 import { useTranslation } from "react-i18next";
 
 interface DocumentValidationRowProps {
   item: DocumentItem;
   onUpdate: (updates: Partial<DocumentItem>) => void;
   onFileChange: (file: File | null) => void;
+  onDelete?: () => void;
   readOnly?: boolean;
   label?: string;
 }
@@ -25,6 +28,7 @@ const DocumentValidationRow: React.FC<DocumentValidationRowProps> = ({
   item,
   onUpdate,
   onFileChange,
+  onDelete,
   readOnly = false,
   label,
 }) => {
@@ -34,17 +38,26 @@ const DocumentValidationRow: React.FC<DocumentValidationRowProps> = ({
     onUpdate({ isRequested: e.target.checked });
   };
 
+  const allowEdit = readOnly ? false : item.isRequested;
+
   const handleDescChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!allowEdit) return;
     onUpdate({ description: e.target.value });
   };
 
   const handleValidationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!allowEdit) return;
     const newStatus =
       e.target.value === "VALIDATED" ? "VALIDATED" : "NOT_VALIDATED";
-    onUpdate({ status: newStatus });
+    const updates: Partial<DocumentItem> = { status: newStatus };
+    if (newStatus !== "VALIDATED" && item.validationDate) {
+      updates.validationDate = undefined;
+    }
+    onUpdate(updates);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!allowEdit) return;
     const file = e.target.files?.[0] || null;
     onFileChange(file);
     if (file) {
@@ -56,7 +69,19 @@ const DocumentValidationRow: React.FC<DocumentValidationRowProps> = ({
     }
   };
 
-  const isDisabled = !item.isRequested || readOnly;
+  const handleValidationDateChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    if (!allowEdit) return;
+    const date = e.target.value;
+    onUpdate({
+      validationDate: date,
+      status: date ? "VALIDATED" : item.status,
+    });
+  };
+
+  const isDisabled = !allowEdit;
+  const canEditValidationFields = allowEdit;
 
   return (
     <Paper
@@ -68,7 +93,6 @@ const DocumentValidationRow: React.FC<DocumentValidationRowProps> = ({
       }}
     >
       <Grid container spacing={2} alignItems="center">
-        {/* Checkbox - Solicitar */}
         <Grid item xs={12} sm="auto">
           <FormControlLabel
             control={
@@ -82,7 +106,6 @@ const DocumentValidationRow: React.FC<DocumentValidationRowProps> = ({
           />
         </Grid>
 
-        {/* Description field */}
         <Grid item xs={12} sm={4}>
           <TextField
             fullWidth
@@ -98,7 +121,6 @@ const DocumentValidationRow: React.FC<DocumentValidationRowProps> = ({
           />
         </Grid>
 
-        {/* Upload button */}
         <Grid item xs={12} sm="auto">
           <Button
             variant="outlined"
@@ -124,12 +146,16 @@ const DocumentValidationRow: React.FC<DocumentValidationRowProps> = ({
           )}
         </Grid>
 
-        {/* Validation Radio group */}
         <Grid item xs={12} sm="auto">
           <RadioGroup
             row
-            value={item.status === "VALIDATED" ? "VALIDATED" : "NOT_VALIDATED"}
+            value={item.status || ""}
             onChange={handleValidationChange}
+            aria-disabled={isDisabled}
+            sx={{
+              pointerEvents: isDisabled ? "none" : "auto",
+              opacity: isDisabled ? 0.6 : 1,
+            }}
           >
             <FormControlLabel
               value="VALIDATED"
@@ -146,30 +172,43 @@ const DocumentValidationRow: React.FC<DocumentValidationRowProps> = ({
           </RadioGroup>
         </Grid>
 
-        {/* Validation date and validator (read-only) */}
         <Grid item xs={12} sm={3}>
-          <TextField
-            fullWidth
-            size="small"
-            label={t("compliance.validationDate", "Data Validação")}
-            type="date"
-            value={item.validationDate || ""}
-            InputLabelProps={{ shrink: true }}
-            disabled
-            variant="outlined"
-          />
+          <Tooltip
+            title={
+              canEditValidationFields
+                ? t(
+                    "compliance.validationDateHelper",
+                    "Data em que foi validado",
+                  )
+                : t(
+                    "compliance.validationDateHelperDisabled",
+                    "Selecione o documento e uma opção de validação",
+                  )
+            }
+          >
+            <span>
+              <TextField
+                fullWidth
+                size="small"
+                label={t("compliance.validationDate", "Data Validação")}
+                type="date"
+                value={item.validationDate || ""}
+                onChange={handleValidationDateChange}
+                InputLabelProps={{ shrink: true }}
+                disabled={!canEditValidationFields}
+                variant="outlined"
+              />
+            </span>
+          </Tooltip>
         </Grid>
 
-        <Grid item xs={12} sm={3}>
-          <TextField
-            fullWidth
-            size="small"
-            label={t("compliance.validator", "Validador")}
-            value={item.validator || ""}
-            disabled
-            variant="outlined"
-          />
-        </Grid>
+        {onDelete && !readOnly && (
+          <Grid item xs={12} sm="auto">
+            <IconButton color="error" onClick={onDelete} size="small">
+              <DeleteIcon />
+            </IconButton>
+          </Grid>
+        )}
       </Grid>
     </Paper>
   );

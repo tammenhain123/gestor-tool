@@ -8,14 +8,18 @@ import Stack from "@mui/material/Stack";
 import Grid from "@mui/material/Grid";
 import Divider from "@mui/material/Divider";
 import Alert from "@mui/material/Alert";
+import Snackbar from "@mui/material/Snackbar";
 import AddIcon from "@mui/icons-material/Add";
-import { useAuth } from "../../auth/AuthProvider";
-import DocumentValidationRow from "./DocumentValidationRow";
-import BankStatementRow from "./BankStatementRow";
-import PatrimonialGoodForm from "./PatrimonialGoodForm";
+import { useAuth } from "../../../auth/AuthProvider";
+import DocumentValidationRow from "./components/DocumentValidationRow";
+import BankStatementRow from "./components/BankStatementRow";
+import PatrimonialGoodForm from "./components/PatrimonialGoodForm";
 import {
   getCompliance,
   saveCompliance,
+  saveOrganogram,
+  saveReport,
+  deleteOrganogram,
   getPatrimonialGoods,
   createPatrimonialGood,
   updatePatrimonialGood,
@@ -23,39 +27,48 @@ import {
   saveBankStatement,
   deleteBankStatement,
   getBankStatements,
-} from "../../services/compliance.service";
+} from "../../../services/compliance.service";
 import {
   ComplianceValidation,
   OrganogramDocument,
   ReportItem,
   BankStatement,
   PatrimonialGood,
-} from "../../types/compliance";
+} from "../../../types/compliance";
 
 type Props = {
   projectId?: string;
   projectName?: string;
 };
 
-const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
+const reportDefinitions = [
+  { key: "relatorio-endividamento", label: "Relatório de Endividamento" },
+  { key: "relatorio-scr", label: "Relatório SCR - BACEN" },
+  { key: "relatorio-recebiveis", label: "Relatório de Recebíveis" },
+  { key: "relatorio-estoque", label: "Relatório de Estoque" },
+  { key: "relatorio-ativo", label: "Relatório de Ativo" },
+  { key: "relatorio-alienacao", label: "Relatório de Alienação/Gravames" },
+] as const;
+
+const CapacidadeForm: React.FC<Props> = ({ projectId, projectName }) => {
   const { t } = useTranslation();
   const { user } = useAuth();
   const isReadOnly = String(user?.role || "").toUpperCase() === "USER";
 
-  // Compliance state
   const [compliance, setCompliance] = useState<ComplianceValidation | null>(
     null,
   );
   const [organograms, setOrganograms] = useState<OrganogramDocument[]>([]);
   const [reports, setReports] = useState<ReportItem[]>([]);
+  const [deletedOrganogramIds, setDeletedOrganogramIds] = useState<string[]>(
+    [],
+  );
 
-  // Bank statements
   const [bankEntries, setBankEntries] = useState<BankStatement[]>([
     { banco: "", numeroConta: "", agencia: "", ano: "", mes: "" },
   ]);
   const [deletedBankEntryIds, setDeletedBankEntryIds] = useState<string[]>([]);
 
-  // Patrimonial goods
   const [patrimonialGoods, setPatrimonialGoods] = useState<PatrimonialGood[]>(
     [],
   );
@@ -73,28 +86,37 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
 
   const projectIdToUse = projectId || "";
 
-  // Load data on mount
   useEffect(() => {
     if (!projectIdToUse) return;
     (async () => {
       try {
         setLoading(true);
 
-        // Load compliance
         const compData = await getCompliance(projectIdToUse);
         if (compData) {
           setCompliance(compData);
           setOrganograms(compData.organograms || []);
-          setReports(compData.reports || []);
+          setReports(
+            reportDefinitions.map(({ key, label }) => {
+              const existing = (compData.reports || []).find(
+                (report) => report.type === key,
+              );
+              return (
+                existing || {
+                  name: label,
+                  type: key,
+                  isRequested: false,
+                }
+              );
+            }),
+          );
         }
 
-        // Load bank statements
         const banks = await getBankStatements(projectIdToUse);
         if (banks.length > 0) {
           setBankEntries(banks);
         }
 
-        // Load patrimonial goods
         const goods = await getPatrimonialGoods(projectIdToUse);
         setPatrimonialGoods(goods);
       } catch (err) {
@@ -109,7 +131,6 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
     })();
   }, [projectIdToUse, t]);
 
-  // ========== ORGANOGRAM HANDLERS ==========
   const updateOrganogram = (
     index: number,
     updates: Partial<OrganogramDocument>,
@@ -129,7 +150,16 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
     });
   };
 
-  // ========== REPORT HANDLERS ==========
+  const deleteOrganogramEntry = (index: number) => {
+    setOrganograms((prev) => {
+      const entry = prev[index];
+      if (entry?.id) {
+        setDeletedOrganogramIds((ids) => [...ids, entry.id!]);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
   const updateReport = (index: number, updates: Partial<ReportItem>) => {
     setReports((prev) => {
       const next = [...prev];
@@ -137,6 +167,39 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
       return next;
     });
   };
+
+  const upsertReportByType = (
+    type: ReportItem["type"],
+    updates: Partial<ReportItem>,
+    label: string,
+  ) => {
+    setReports((prevReports) => {
+      const idx = prevReports.findIndex((report) => report.type === type);
+      const currentReport = idx >= 0 ? prevReports[idx] : undefined;
+      const nextReport: ReportItem = {
+        name: currentReport?.name || label,
+        type,
+        isRequested: currentReport?.isRequested ?? false,
+        ...currentReport,
+        ...updates,
+      } as ReportItem;
+
+      if (nextReport.validationDate) {
+        nextReport.status = nextReport.status || "VALIDATED";
+      }
+
+      if (idx >= 0) {
+        const next = [...prevReports];
+        next[idx] = nextReport;
+        return next;
+      }
+
+      return [...prevReports, nextReport];
+    });
+  };
+
+  const getReportIndexByType = (type: ReportItem["type"]) =>
+    reports.findIndex((report) => report.type === type);
 
   const updateReportFile = (index: number, file: File | null) => {
     setReports((prev) => {
@@ -146,7 +209,6 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
     });
   };
 
-  // ========== BANK ENTRY HANDLERS ==========
   const updateBankEntry = (index: number, updates: Partial<BankStatement>) => {
     setBankEntries((prev) => {
       const next = [...prev];
@@ -171,7 +233,6 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
   };
 
   const deleteBankEntry = (index: number) => {
-    // Track the ID if this entry was already saved to the database
     setBankEntries((prev) => {
       const entry = prev[index];
       if (entry.id) {
@@ -181,7 +242,6 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
     });
   };
 
-  // ========== PATRIMONIAL GOOD HANDLERS ==========
   const openGoodDialog = (good?: PatrimonialGood) => {
     setSelectedGood(good || null);
     setDialogOpen(true);
@@ -237,34 +297,81 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
     }
   };
 
-  // ========== SAVE ALL ==========
   const handleSaveAll = async () => {
     if (!projectIdToUse) return;
 
     try {
       setSaving(true);
 
-      // Save compliance (organograms + reports)
+      const generateId = () =>
+        `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      const organogramsWithIds = organograms.map((item) => ({
+        ...item,
+        id: item.id || generateId(),
+      }));
+
+      const reportsWithIds = reports.map((item) => ({
+        ...item,
+        id: item.id || generateId(),
+      }));
+
       const payload: Partial<ComplianceValidation> = {
-        organograms: organograms.map(({ file, ...rest }: any) => rest),
-        reports: reports.map(({ file, ...rest }: any) => rest),
+        organograms: organogramsWithIds.map(({ file, ...rest }: any) => rest),
+        reports: reportsWithIds.map(({ file, ...rest }: any) => rest),
       };
 
-      await saveCompliance(projectIdToUse, payload);
+      try {
+        for (const id of deletedOrganogramIds) {
+          await deleteOrganogram(projectIdToUse, id);
+        }
+        setDeletedOrganogramIds([]);
 
-      // Delete bank entries that were removed
+        for (const item of payload.organograms || []) {
+          await saveOrganogram(projectIdToUse, item as OrganogramDocument);
+        }
+
+        for (const item of payload.reports || []) {
+          await saveReport(projectIdToUse, item as ReportItem);
+        }
+      } catch (complianceSaveErr) {
+        // Fallback to legacy bulk save when granular endpoints fail in runtime.
+        await saveCompliance(projectIdToUse, payload);
+      }
+
       for (const id of deletedBankEntryIds) {
         await deleteBankStatement(projectIdToUse, id);
       }
-      setDeletedBankEntryIds([]); // Clear the deleted IDs after processing
+      setDeletedBankEntryIds([]);
 
-      // Save bank entries
       for (const entry of bankEntries) {
         if (entry.banco) {
-          // Only save if has banco (required field)
           await saveBankStatement(projectIdToUse, entry as any);
         }
       }
+
+      const updatedCompliance = await getCompliance(projectIdToUse);
+      if (updatedCompliance) {
+        setCompliance(updatedCompliance);
+        setOrganograms(updatedCompliance.organograms || []);
+        setReports(
+          reportDefinitions.map(({ key, label }) => {
+            const existing = (updatedCompliance.reports || []).find(
+              (report) => report.type === key,
+            );
+            return (
+              existing || {
+                name: label,
+                type: key,
+                isRequested: false,
+              }
+            );
+          }),
+        );
+      }
+
+      const banks = await getBankStatements(projectIdToUse);
+      setBankEntries(banks && banks.length > 0 ? banks : []);
 
       setMessage({
         type: "success",
@@ -291,17 +398,21 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
 
   return (
     <Box sx={{ p: 3 }}>
-      {message && (
+      <Snackbar
+        open={!!message}
+        autoHideDuration={6000}
+        onClose={() => setMessage(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+      >
         <Alert
-          severity={message.type}
           onClose={() => setMessage(null)}
-          sx={{ mb: 2 }}
+          severity={message?.type || "success"}
+          sx={{ width: "100%" }}
         >
-          {message.text}
+          {message?.text}
         </Alert>
-      )}
+      </Snackbar>
 
-      {/* BLOCO 1: ORGANOGRAMA */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
           {t("compliance.organogram", "ORGANOGRAMA DE CARGOS E FUNÇÕES")}
@@ -319,6 +430,7 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
               item={item}
               onUpdate={(updates) => updateOrganogram(idx, updates)}
               onFileChange={(file) => updateOrganogramFile(idx, file)}
+              onDelete={() => deleteOrganogramEntry(idx)}
               readOnly={isReadOnly}
               label={item.description}
             />
@@ -345,7 +457,6 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
         </Button>
       </Paper>
 
-      {/* BLOCO 2: EXTRATOS BANCÁRIOS */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
           {t("compliance.bankStatements", "EXTRATOS BANCÁRIOS")}
@@ -375,7 +486,6 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
         </Button>
       </Paper>
 
-      {/* BLOCO 3: RELATÓRIOS */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
           {t("compliance.reports", "RELATÓRIOS")}
@@ -383,20 +493,7 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
         <Divider sx={{ mb: 2 }} />
 
         <Grid container spacing={2} sx={{ mb: 2 }}>
-          {[
-            {
-              key: "relatorio-endividamento",
-              label: "Relatório de Endividamento",
-            },
-            { key: "relatorio-scr", label: "Relatório SCR - BACEN" },
-            { key: "relatorio-recebiveis", label: "Relatório de Recebíveis" },
-            { key: "relatorio-estoque", label: "Relatório de Estoque" },
-            { key: "relatorio-ativo", label: "Relatório de Ativo" },
-            {
-              key: "relatorio-alienacao",
-              label: "Relatório de Alienação/Gravames",
-            },
-          ].map(({ key, label }) => {
+          {reportDefinitions.map(({ key, label }) => {
             const existing = reports.find((r) => r.type === (key as any));
             return (
               <Grid item xs={12} key={key}>
@@ -409,29 +506,26 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
                     }
                   }
                   onUpdate={(updates) => {
-                    if (existing) {
-                      const idx = reports.findIndex(
-                        (r) => r.type === (key as any),
-                      );
-                      updateReport(idx, updates);
-                    } else {
-                      setReports((prev) => [
-                        ...prev,
-                        {
-                          name: label,
-                          type: key as any,
-                          ...updates,
-                        } as ReportItem,
-                      ]);
-                    }
+                    upsertReportByType(
+                      key as ReportItem["type"],
+                      updates,
+                      label,
+                    );
                   }}
                   onFileChange={(file) => {
                     if (existing) {
-                      const idx = reports.findIndex(
-                        (r) => r.type === (key as any),
+                      const idx = getReportIndexByType(
+                        key as ReportItem["type"],
                       );
                       updateReportFile(idx, file);
+                      return;
                     }
+
+                    upsertReportByType(
+                      key as ReportItem["type"],
+                      { file },
+                      label,
+                    );
                   }}
                   readOnly={isReadOnly}
                   label={label}
@@ -442,7 +536,6 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
         </Grid>
       </Paper>
 
-      {/* BLOCO 4 & 5: BENS PATRIMONIAIS */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
           {t("compliance.patrimonialGoods", "BENS PATRIMONIAIS")}
@@ -512,7 +605,6 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
         </Button>
       </Paper>
 
-      {/* Save Button */}
       <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end", mt: 3 }}>
         <Button
           variant="contained"
@@ -525,7 +617,6 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
         </Button>
       </Box>
 
-      {/* Patrimonial Good Dialog */}
       <PatrimonialGoodForm
         item={selectedGood || undefined}
         open={dialogOpen}
@@ -540,4 +631,4 @@ const ComplianceForm: React.FC<Props> = ({ projectId, projectName }) => {
   );
 };
 
-export default ComplianceForm;
+export default CapacidadeForm;

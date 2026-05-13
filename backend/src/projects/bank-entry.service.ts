@@ -62,6 +62,7 @@ export class BankEntryService {
     entry.status = payload.status || BankStatementStatus.PENDENTE;
     entry.validationDate = payload.validationDate;
     entry.validatorId = payload.validatorId;
+    entry.validatorName = payload.validatorName;
     entry.originalName = payload.originalName;
     entry.mimeType = payload.mimeType;
     entry.size = payload.size;
@@ -91,6 +92,8 @@ export class BankEntryService {
       entry.validationDate = payload.validationDate;
     if (payload.validatorId !== undefined)
       entry.validatorId = payload.validatorId;
+    if (payload.validatorName !== undefined)
+      entry.validatorName = payload.validatorName;
     if (payload.originalName !== undefined)
       entry.originalName = payload.originalName;
     if (payload.mimeType !== undefined) entry.mimeType = payload.mimeType;

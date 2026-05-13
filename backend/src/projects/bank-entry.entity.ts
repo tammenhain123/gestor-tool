@@ -69,6 +69,9 @@ export class BankEntry {
   @Column({ nullable: true })
   validatorId?: string;
 
+  @Column({ nullable: true })
+  validatorName?: string;
+
   @ManyToOne(() => User, { nullable: true, onDelete: "SET NULL" })
   validator?: User;
 

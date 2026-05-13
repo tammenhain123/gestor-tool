@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Param,
   Body,
   UseGuards,
@@ -12,7 +13,11 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { JwtPayload } from "../auth/jwt.strategy";
 import { ComplianceValidationService } from "./compliance-validation.service";
-import { SaveComplianceValidationDto } from "./dto/compliance-validation.dto";
+import {
+  SaveComplianceValidationDto,
+  CreateOrganogramDto,
+  CreateReportDto,
+} from "./dto/compliance-validation.dto";
 import { ComplianceDocumentStatus } from "./compliance-validation.entity";
 import { UsersService } from "../users/users.service";
 
@@ -41,7 +46,7 @@ export class ComplianceValidationController {
   @Post(":projectId/compliance")
   async saveCompliance(
     @Param("projectId") projectId: string,
-    @Body() payload: SaveComplianceValidationDto,
+    @Body() payload: any,
     @CurrentUser() user: JwtPayload | null,
   ) {
     let actor = null;
@@ -50,6 +55,64 @@ export class ComplianceValidationController {
     }
 
     return this.complianceService.saveCompliance(projectId, payload, actor);
+  }
+
+  /**
+   * POST /projects/:projectId/compliance/organogram/upsert
+   * Upsert single organogram
+   */
+  @Post(":projectId/compliance/organogram/upsert")
+  async upsertOrganogram(
+    @Param("projectId") projectId: string,
+    @Body() payload: CreateOrganogramDto,
+    @CurrentUser() user: JwtPayload | null,
+  ) {
+    let actor = null;
+    if (user?.sub) {
+      actor = await this.usersService.findByAnyId(user.sub);
+    }
+
+    return this.complianceService.upsertOrganogram(projectId, payload, actor);
+  }
+
+  /**
+   * DELETE /projects/:projectId/compliance/organogram/:organogramId
+   * Delete single organogram
+   */
+  @Delete(":projectId/compliance/organogram/:organogramId")
+  async deleteOrganogram(
+    @Param("projectId") projectId: string,
+    @Param("organogramId") organogramId: string,
+    @CurrentUser() user: JwtPayload | null,
+  ) {
+    let actor = null;
+    if (user?.sub) {
+      actor = await this.usersService.findByAnyId(user.sub);
+    }
+
+    return this.complianceService.deleteOrganogram(
+      projectId,
+      organogramId,
+      actor,
+    );
+  }
+
+  /**
+   * POST /projects/:projectId/compliance/report/upsert
+   * Upsert single report
+   */
+  @Post(":projectId/compliance/report/upsert")
+  async upsertReport(
+    @Param("projectId") projectId: string,
+    @Body() payload: CreateReportDto,
+    @CurrentUser() user: JwtPayload | null,
+  ) {
+    let actor = null;
+    if (user?.sub) {
+      actor = await this.usersService.findByAnyId(user.sub);
+    }
+
+    return this.complianceService.upsertReport(projectId, payload, actor);
   }
 
   /**

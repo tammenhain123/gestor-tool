@@ -1,6 +1,8 @@
 import { api } from "./api";
 import {
   ComplianceValidation,
+  OrganogramDocument,
+  ReportItem,
   PatrimonialGood,
   BankStatement,
 } from "../types/compliance";
@@ -27,10 +29,60 @@ export async function saveCompliance(
   projectId: string,
   payload: Partial<ComplianceValidation>,
 ): Promise<ComplianceValidation> {
+  console.log("=== SAVING COMPLIANCE ===");
+  console.log("Full payload being sent:", JSON.stringify(payload, null, 2)); // DEBUG - Detailed
+  console.log("Reports in payload:", payload.reports); // DEBUG
+  if (payload.reports) {
+    payload.reports.forEach((rep, idx) => {
+      console.log(`Report ${idx}:`, {
+        id: rep.id,
+        type: rep.type,
+        status: rep.status,
+        validationDate: rep.validationDate,
+        description: rep.description,
+      });
+    });
+  }
+  if (payload.organograms) {
+    payload.organograms.forEach((org, idx) => {
+      console.log(`Organogram ${idx}:`, {
+        id: org.id,
+        name: org.name,
+        status: org.status,
+        validationDate: org.validationDate,
+        description: org.description,
+      });
+    });
+  }
+
   const res = await api.post<ComplianceValidation>(
     `/projects/${projectId}/compliance`,
     payload,
   );
+  console.log("=== COMPLIANCE SAVED RESPONSE ===");
+  console.log("Response reports:", res.data.reports); // DEBUG
+  if (res.data.reports) {
+    res.data.reports.forEach((rep, idx) => {
+      console.log(`Response Report ${idx}:`, {
+        id: rep.id,
+        type: rep.type,
+        status: rep.status,
+        validationDate: rep.validationDate,
+        description: rep.description,
+      });
+    });
+  }
+  if (res.data.organograms) {
+    res.data.organograms.forEach((org, idx) => {
+      console.log(`Response Organogram ${idx}:`, {
+        id: org.id,
+        name: org.name,
+        status: org.status,
+        validationDate: org.validationDate,
+        description: org.description,
+      });
+    });
+  }
   return res.data;
 }
 
@@ -45,6 +97,32 @@ export async function addOrganogram(
       name,
       description,
     },
+  );
+  return res.data;
+}
+
+export async function saveOrganogram(
+  projectId: string,
+  data: OrganogramDocument,
+): Promise<ComplianceValidation> {
+  const payload = {
+    ...data,
+    file: undefined,
+  };
+
+  const res = await api.post<ComplianceValidation>(
+    `/projects/${projectId}/compliance/organogram/upsert`,
+    payload,
+  );
+  return res.data;
+}
+
+export async function deleteOrganogram(
+  projectId: string,
+  organogramId: string,
+): Promise<ComplianceValidation> {
+  const res = await api.delete<ComplianceValidation>(
+    `/projects/${projectId}/compliance/organogram/${organogramId}`,
   );
   return res.data;
 }
@@ -72,6 +150,22 @@ export async function addReport(
       type,
       description,
     },
+  );
+  return res.data;
+}
+
+export async function saveReport(
+  projectId: string,
+  data: ReportItem,
+): Promise<ComplianceValidation> {
+  const payload = {
+    ...data,
+    file: undefined,
+  };
+
+  const res = await api.post<ComplianceValidation>(
+    `/projects/${projectId}/compliance/report/upsert`,
+    payload,
   );
   return res.data;
 }
@@ -179,7 +273,11 @@ export async function getBankStatements(
       `/projects/${projectId}/bank-entries`,
       { params },
     );
-    return res.data;
+    // Transform validatorName -> validator for frontend consistency
+    return res.data.map((entry: any) => ({
+      ...entry,
+      validator: entry.validatorName || entry.validator,
+    }));
   } catch {
     return [];
   }
@@ -189,16 +287,25 @@ export async function saveBankStatement(
   projectId: string,
   data: BankStatement,
 ): Promise<BankStatement> {
+  // Transform validator -> validatorName for backend compatibility
+  const payload = {
+    ...data,
+    validatorName: data.validator,
+    validator: undefined,
+  };
+
+  console.log("Saving bank statement:", { data, payload }); // DEBUG
+
   if (data.id) {
     const res = await api.put<BankStatement>(
       `/projects/${projectId}/bank-entries/${data.id}`,
-      data,
+      payload,
     );
     return res.data;
   } else {
     const res = await api.post<BankStatement>(
       `/projects/${projectId}/bank-entries`,
-      data,
+      payload,
     );
     return res.data;
   }

@@ -13,7 +13,11 @@ import {
 } from "./compliance-validation.entity";
 import { Project } from "./project.entity";
 import { User } from "../users/user.entity";
-import { SaveComplianceValidationDto } from "./dto/compliance-validation.dto";
+import {
+  SaveComplianceValidationDto,
+  CreateOrganogramDto,
+  CreateReportDto,
+} from "./dto/compliance-validation.dto";
 
 @Injectable()
 export class ComplianceValidationService {
@@ -23,6 +27,21 @@ export class ComplianceValidationService {
     @InjectRepository(Project)
     private projectRepo: Repository<Project>,
   ) {}
+
+  private mergeDefinedFields<T extends Record<string, any>>(
+    current: T | undefined,
+    incoming: Partial<T>,
+  ): T {
+    const merged: Record<string, any> = { ...(current || {}) };
+
+    for (const [key, value] of Object.entries(incoming)) {
+      if (value !== undefined) {
+        merged[key] = value;
+      }
+    }
+
+    return merged as T;
+  }
 
   /**
    * Get compliance validation for a project
@@ -34,15 +53,10 @@ export class ComplianceValidationService {
     });
   }
 
-  /**
-   * Save or update compliance validation
-   */
-  async saveCompliance(
+  private async getOrCreateCompliance(
     projectId: string,
-    payload: SaveComplianceValidationDto,
     actor: User | null,
   ): Promise<ComplianceValidation> {
-    // Verify project exists
     const project = await this.projectRepo.findOne({
       where: { id: projectId },
     });
@@ -50,7 +64,39 @@ export class ComplianceValidationService {
       throw new NotFoundException("Project not found");
     }
 
-    // Find existing or create new
+    let compliance = await this.complianceRepo.findOne({
+      where: { projectId },
+    });
+    if (!compliance) {
+      compliance = this.complianceRepo.create({
+        projectId,
+        createdByUserId: actor?.id,
+        lastModifiedByUserId: actor?.id,
+        auditLog: [],
+        organograms: [],
+        reports: [],
+      });
+      compliance = await this.complianceRepo.save(compliance);
+    }
+
+    return compliance;
+  }
+
+  /**
+   * Save or update compliance validation
+   */
+  async saveCompliance(
+    projectId: string,
+    payload: SaveComplianceValidationDto | any,
+    actor: User | null,
+  ): Promise<ComplianceValidation> {
+    const project = await this.projectRepo.findOne({
+      where: { id: projectId },
+    });
+    if (!project) {
+      throw new NotFoundException("Project not found");
+    }
+
     let compliance = await this.complianceRepo.findOne({
       where: { projectId },
     });
@@ -65,33 +111,52 @@ export class ComplianceValidationService {
 
     // Update organograms
     if (payload.organograms !== undefined) {
-      const organograms: OrganogramDocument[] = payload.organograms.map(
-        (org) => ({
+      const currentOrganogramsById = new Map(
+        (compliance.organograms || [])
+          .filter((org) => org.id)
+          .map((org) => [org.id as string, org]),
+      );
+      compliance.organograms = payload.organograms.map((org: any) => {
+        const current = org.id ? currentOrganogramsById.get(org.id) : undefined;
+        return this.mergeDefinedFields<OrganogramDocument>(current, {
           ...org,
+          id: org.id || current?.id || crypto.randomUUID(),
+          name: org.name || current?.name || "Organograma",
           type: "organogram",
           isRequested: true,
-          status: org.status || ComplianceDocumentStatus.PENDING,
-        }),
-      );
-      compliance.organograms = organograms;
+          status:
+            org.status || current?.status || ComplianceDocumentStatus.PENDING,
+          validationDate: org.validationDate ?? current?.validationDate,
+          validator: org.validator ?? current?.validator,
+        });
+      });
     }
 
     // Update reports
     if (payload.reports !== undefined) {
-      const reports: ReportItem[] = payload.reports.map((rep) => ({
-        name: rep.name || rep.type,
-        ...rep,
-        type: rep.type as any,
-        isRequested: true,
-        status: rep.status || ComplianceDocumentStatus.PENDING,
-      }));
-      compliance.reports = reports;
+      const currentReportsById = new Map(
+        (compliance.reports || [])
+          .filter((rep) => rep.id)
+          .map((rep) => [rep.id as string, rep]),
+      );
+      compliance.reports = payload.reports.map((rep: any) => {
+        const current = rep.id ? currentReportsById.get(rep.id) : undefined;
+        return this.mergeDefinedFields<ReportItem>(current, {
+          id: rep.id || current?.id || crypto.randomUUID(),
+          name: rep.name || rep.type,
+          ...rep,
+          type: rep.type as any,
+          isRequested: true,
+          status:
+            rep.status || current?.status || ComplianceDocumentStatus.PENDING,
+          validationDate: rep.validationDate ?? current?.validationDate,
+          validator: rep.validator ?? current?.validator,
+        });
+      });
     }
 
-    // Add audit log entry
-    if (!compliance.auditLog) {
-      compliance.auditLog = [];
-    }
+    // Audit log
+    if (!compliance.auditLog) compliance.auditLog = [];
     compliance.auditLog.push({
       timestamp: new Date().toISOString(),
       action: "COMPLIANCE_UPDATED",
@@ -101,6 +166,139 @@ export class ComplianceValidationService {
 
     compliance.lastModifiedByUserId = actor?.id;
     compliance.lastModifiedBy = actor ?? undefined;
+
+    // Força TypeORM a detectar mudança no jsonb
+    compliance.organograms = JSON.parse(JSON.stringify(compliance.organograms));
+    compliance.reports = JSON.parse(JSON.stringify(compliance.reports));
+
+    await this.complianceRepo.update(
+      { projectId },
+      {
+        organograms: compliance.organograms,
+        reports: compliance.reports,
+        auditLog: compliance.auditLog,
+        lastModifiedByUserId: compliance.lastModifiedByUserId,
+      },
+    );
+
+    const reloaded = await this.complianceRepo.findOne({
+      where: { projectId },
+    });
+    return reloaded as ComplianceValidation;
+  }
+
+  async upsertOrganogram(
+    projectId: string,
+    payload: CreateOrganogramDto,
+    actor: User | null,
+  ): Promise<ComplianceValidation> {
+    const compliance = await this.getOrCreateCompliance(projectId, actor);
+
+    const organograms = [...(compliance.organograms || [])];
+    const idx = payload.id
+      ? organograms.findIndex((item) => item.id === payload.id)
+      : -1;
+
+    const current = idx >= 0 ? organograms[idx] : undefined;
+    const next = this.mergeDefinedFields<OrganogramDocument>(current, {
+      ...payload,
+      id: payload.id || current?.id || crypto.randomUUID(),
+      type: "organogram",
+      isRequested: payload.isRequested ?? current?.isRequested ?? false,
+      name: payload.name || current?.name || "Organograma",
+      status:
+        payload.status || current?.status || ComplianceDocumentStatus.PENDING,
+      validationDate: payload.validationDate ?? current?.validationDate,
+      validator: payload.validator ?? current?.validator,
+    });
+
+    if (idx >= 0) {
+      organograms[idx] = next;
+    } else {
+      organograms.push(next);
+    }
+
+    compliance.organograms = JSON.parse(JSON.stringify(organograms));
+    compliance.lastModifiedByUserId = actor?.id;
+    compliance.auditLog = [
+      ...(compliance.auditLog || []),
+      {
+        timestamp: new Date().toISOString(),
+        action: "ORGANOGRAM_UPSERT",
+        user: actor?.username || "system",
+        changes: payload,
+      },
+    ];
+
+    return this.complianceRepo.save(compliance);
+  }
+
+  async upsertReport(
+    projectId: string,
+    payload: CreateReportDto,
+    actor: User | null,
+  ): Promise<ComplianceValidation> {
+    const compliance = await this.getOrCreateCompliance(projectId, actor);
+
+    const reports = [...(compliance.reports || [])];
+    const idx = payload.id
+      ? reports.findIndex((item) => item.id === payload.id)
+      : reports.findIndex((item) => item.type === payload.type);
+
+    const current = idx >= 0 ? reports[idx] : undefined;
+    const next = this.mergeDefinedFields<ReportItem>(current, {
+      ...payload,
+      id: payload.id || current?.id || crypto.randomUUID(),
+      name: payload.name || current?.name || payload.type,
+      type: payload.type as any,
+      isRequested: payload.isRequested ?? current?.isRequested ?? false,
+      status:
+        payload.status || current?.status || ComplianceDocumentStatus.PENDING,
+      validationDate: payload.validationDate ?? current?.validationDate,
+      validator: payload.validator ?? current?.validator,
+    });
+
+    if (idx >= 0) {
+      reports[idx] = next;
+    } else {
+      reports.push(next);
+    }
+
+    compliance.reports = JSON.parse(JSON.stringify(reports));
+    compliance.lastModifiedByUserId = actor?.id;
+    compliance.auditLog = [
+      ...(compliance.auditLog || []),
+      {
+        timestamp: new Date().toISOString(),
+        action: "REPORT_UPSERT",
+        user: actor?.username || "system",
+        changes: payload,
+      },
+    ];
+
+    return this.complianceRepo.save(compliance);
+  }
+
+  async deleteOrganogram(
+    projectId: string,
+    organogramId: string,
+    actor: User | null,
+  ): Promise<ComplianceValidation> {
+    const compliance = await this.getOrCreateCompliance(projectId, actor);
+
+    compliance.organograms = (compliance.organograms || []).filter(
+      (item) => item.id !== organogramId,
+    );
+    compliance.lastModifiedByUserId = actor?.id;
+    compliance.auditLog = [
+      ...(compliance.auditLog || []),
+      {
+        timestamp: new Date().toISOString(),
+        action: "ORGANOGRAM_DELETE",
+        user: actor?.username || "system",
+        changes: { organogramId },
+      },
+    ];
 
     return this.complianceRepo.save(compliance);
   }
