@@ -100,7 +100,7 @@ export class ProjectsController {
   async getQualification(@Param("id") id: string) {
     const q = await this.projectsService.getQualification(id);
     if (!q) return null;
-    return q.data ?? null;
+    return { id: q.id, ...(q.data ?? {}) };
   }
 
   @Get(":id/capacity")
@@ -301,7 +301,13 @@ export class ProjectsController {
       } as unknown as User;
     }
 
-    return this.projectsService.saveQualification(id, dto, actor as any);
+    const saved = await this.projectsService.saveQualification(
+      id,
+      dto,
+      actor as any,
+    );
+    if (!saved) return null;
+    return { id: saved.id, ...(saved.data ?? {}) };
   }
 
   @Put(":id/capacity")

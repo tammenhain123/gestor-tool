@@ -35,6 +35,7 @@ const ProjectDetail: React.FC = () => {
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [qualification, setQualification] = useState<any | null>(null);
+  const [requirements, setRequirements] = useState<any | null>(null);
   const [capacity, setCapacity] = useState<any | null>(null);
   const [strategy, setStrategy] = useState<any | null>(null);
   const [toast, setToast] = useState<{
@@ -60,6 +61,12 @@ const ProjectDetail: React.FC = () => {
             await import("../services/project.service")
           ).getQualification(id);
           setQualification(q ?? null);
+          try {
+            const req = await (
+              await import("../services/project.service")
+            ).getRequirements(id);
+            setRequirements(req ?? null);
+          } catch (e) {}
           try {
             const c = await (
               await import("../services/project.service")
@@ -237,13 +244,17 @@ const ProjectDetail: React.FC = () => {
               />
             ) : i === 2 ? (
               <AvaliacaoCenarioForm
-                initial={undefined}
+                initial={requirements ?? undefined}
                 projectId={id}
                 projectName={project?.name}
                 onSave={async (data) => {
                   try {
+                    const saved = await (
+                      await import("../services/project.service")
+                    ).saveRequirements(id!, data);
+                    setRequirements(saved);
                     setToast({ type: "success", message: "Avaliação salva" });
-                    return data;
+                    return saved;
                   } catch (e) {
                     console.error(e);
                     setToast({

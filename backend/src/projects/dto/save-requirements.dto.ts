@@ -8,4 +8,12 @@ export class SaveRequirementsDto {
   @Allow()
   @IsOptional()
   obrigacoes?: any[];
+
+  @Allow()
+  @IsOptional()
+  topDocs?: any[];
+
+  @Allow()
+  @IsOptional()
+  years?: any[];
 }
