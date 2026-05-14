@@ -14,6 +14,7 @@ import { BankEntry } from "./bank-entry.entity";
 import { Asset } from "./asset.entity";
 import { FinancialDoc } from "./financial-doc.entity";
 import { Indicator } from "./indicator.entity";
+import { Requirement } from "./requirement.entity";
 import { CreateProjectDto } from "./dto/create-project.dto";
 import { UpdateProjectDto } from "./dto/update-project.dto";
 import { User } from "../users/user.entity";
@@ -40,6 +41,8 @@ export class ProjectsService {
     private readonly docRepo: Repository<FinancialDoc>,
     @InjectRepository(Indicator)
     private readonly indicatorRepo: Repository<Indicator>,
+    @InjectRepository(Requirement)
+    private readonly requirementRepo: Repository<Requirement>,
   ) {}
 
   // NOTE: Encoding/repair helpers removed. The service will no longer
@@ -293,6 +296,62 @@ export class ProjectsService {
       return saved.data ?? null;
     } catch (e) {
       this.logger.error(`saveIndicators failed for project=${projectId}: ${e}`);
+      throw e;
+    }
+  }
+
+  async getRequirements(projectId: string): Promise<any | null> {
+    const req = await this.requirementRepo.findOne({
+      where: { projectId },
+      relations: ["project"],
+    });
+    return req?.data ?? null;
+  }
+
+  async saveRequirements(
+    projectId: string,
+    payload: any,
+    actor: User | null,
+  ): Promise<any> {
+    const project = await this.findOne(projectId);
+    if (!project) throw new NotFoundException("Project not found");
+
+    const sanitizeStrings = (v: any): any => {
+      if (v === null || v === undefined) return v;
+      if (typeof v === "string") return v.normalize ? v.normalize("NFC") : v;
+      if (Array.isArray(v)) return v.map((x) => sanitizeStrings(x));
+      if (typeof v === "object") {
+        const out: any = {};
+        for (const k of Object.keys(v)) out[k] = sanitizeStrings((v as any)[k]);
+        return out;
+      }
+      return v;
+    };
+
+    const sanitizedPayload = sanitizeStrings(payload);
+
+    try {
+      let req = await this.requirementRepo.findOne({
+        where: { projectId },
+        relations: ["project"],
+      });
+
+      if (!req) {
+        req = this.requirementRepo.create({
+          projectId,
+          project,
+          data: sanitizedPayload,
+        });
+      } else {
+        req.data = sanitizedPayload;
+      }
+
+      const saved = await this.requirementRepo.save(req);
+      return saved.data ?? null;
+    } catch (e) {
+      this.logger.error(
+        `saveRequirements failed for project=${projectId}: ${e}`,
+      );
       throw e;
     }
   }

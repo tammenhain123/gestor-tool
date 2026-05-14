@@ -11,6 +11,7 @@ import { BankEntry } from "./bank-entry.entity";
 import { Asset } from "./asset.entity";
 import { FinancialDoc } from "./financial-doc.entity";
 import { Indicator } from "./indicator.entity";
+import { Requirement } from "./requirement.entity";
 import { ComplianceValidation } from "./compliance-validation.entity";
 import { PatrimonialGood } from "./patrimonial-good.entity";
 import { User } from "../users/user.entity";
@@ -40,6 +41,7 @@ import { BankEntryController } from "./bank-entry.controller";
       Capacity,
       Strategy,
       Indicator,
+      Requirement,
       ComplianceValidation,
       PatrimonialGood,
     ]),

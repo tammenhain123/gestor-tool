@@ -18,6 +18,7 @@ import { User, Role } from "../users/user.entity";
 import { CreateProjectDto } from "./dto/create-project.dto";
 import { UpdateProjectDto } from "./dto/update-project.dto";
 import { SaveIndicadoresDto } from "./dto/save-indicadores.dto";
+import { SaveRequirementsDto } from "./dto/save-requirements.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { Roles } from "../auth/roles.decorator";
@@ -134,6 +135,17 @@ export class ProjectsController {
     } catch (e) {
       this.logger.error(`getIndicators failed for project=${id}: ${e}`);
       throw new InternalServerErrorException("Failed to load indicadores");
+    }
+  }
+
+  @Get(":id/requisitos")
+  async getRequirements(@Param("id") id: string) {
+    try {
+      const data = await this.projectsService.getRequirements(id);
+      return data;
+    } catch (e) {
+      this.logger.error(`getRequirements failed for project=${id}: ${e}`);
+      throw new InternalServerErrorException("Failed to load requisitos");
     }
   }
 
@@ -448,6 +460,59 @@ export class ProjectsController {
     } catch (e) {
       this.logger.error(`saveIndicators failed for project=${id}: ${e}`);
       throw new InternalServerErrorException("Failed to save indicadores");
+    }
+  }
+
+  @Put(":id/requisitos")
+  async saveRequirements(
+    @Param("id") id: string,
+    @Body() dto: SaveRequirementsDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    let actor = await this.resolveActor((user as any)?.sub);
+    if (!actor) {
+      const uAny = user as any;
+      const hasMaster =
+        (Array.isArray(uAny?.realm_access?.roles) &&
+          uAny.realm_access.roles.includes("MASTER")) ||
+        (Array.isArray(uAny?.roles) && uAny.roles.includes("MASTER")) ||
+        (uAny?.resource_access &&
+          typeof uAny.resource_access === "object" &&
+          Object.values(uAny.resource_access).some(
+            (entry: any) =>
+              Array.isArray(entry.roles) && entry.roles.includes("MASTER"),
+          ));
+      const hasAdmin =
+        (Array.isArray(uAny?.realm_access?.roles) &&
+          uAny.realm_access.roles.includes("ADMIN")) ||
+        (Array.isArray(uAny?.roles) && uAny.roles.includes("ADMIN")) ||
+        (uAny?.resource_access &&
+          typeof uAny.resource_access === "object" &&
+          Object.values(uAny.resource_access).some(
+            (entry: any) =>
+              Array.isArray(entry.roles) && entry.roles.includes("ADMIN"),
+          ));
+
+      if (!hasMaster && !hasAdmin)
+        throw new NotFoundException(
+          "Local user not found for current principal",
+        );
+
+      actor = {
+        id: null as any,
+        keycloakId: user.sub,
+        username: uAny?.preferred_username ?? uAny?.username ?? null,
+        email: uAny?.email ?? null,
+        tenantId: uAny?.tenant_id ?? uAny?.tenantId ?? null,
+        role: hasMaster ? Role.MASTER : Role.ADMIN,
+      } as unknown as User;
+    }
+
+    try {
+      return await this.projectsService.saveRequirements(id, dto, actor as any);
+    } catch (e) {
+      this.logger.error(`saveRequirements failed for project=${id}: ${e}`);
+      throw new InternalServerErrorException("Failed to save requisitos");
     }
   }
 

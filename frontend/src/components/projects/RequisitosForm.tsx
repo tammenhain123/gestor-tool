@@ -13,11 +13,18 @@ import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
+import Snackbar from "@mui/material/Snackbar";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import FilePreview from "../../components/common/FilePreview";
 import { api } from "../../services/api";
+import {
+  list as listFiles,
+  saveMetadata,
+  presign,
+  uploadViaBackend,
+} from "../../services/file.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,12 +44,16 @@ interface Obrigacao {
   competencia: string;
   arquivo: File | null;
   arquivoName: string;
+  arquivoS3Key?: string;
   arquivoPdf: File | null;
   arquivoPdfName: string;
+  arquivoPdfS3Key?: string;
   comprovante: File | null;
   comprovanteName: string;
+  comprovanteS3Key?: string;
   comprovantePdf: File | null;
   comprovantePdfName: string;
+  comprovantePdfS3Key?: string;
   isRequested?: boolean;
 }
 
@@ -158,25 +169,18 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
       />
     </Button>
     {(file || fileName || s3Key) && (
-      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-        <FilePreview
-          file={file}
-          fileName={file?.name || fileName || null}
-          s3Key={s3Key || null}
-        />
-        <Typography
-          variant="caption"
-          sx={{
-            color: "#666",
-            maxWidth: 140,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {file?.name || fileName}
-        </Typography>
-      </Box>
+      <Typography
+        variant="caption"
+        sx={{
+          color: "#666",
+          maxWidth: 140,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {file?.name || fileName || s3Key}
+      </Typography>
     )}
   </Stack>
 );
@@ -201,18 +205,115 @@ const RequisitosForm: React.FC<Props> = ({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
 
   // ── Load requisitos on mount ────────────────────────────────────────────────
 
   useEffect(() => {
+    if (!projectId) {
+      setLoading(false);
+      return;
+    }
+
     const loadRequisitos = async () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await api.get(`/projects/${projectId}/requisitos`);
-        if (response.data) {
-          setCertidoes(buildDefaultCertidoes(response.data?.certidoes));
-          setObrigacoes(buildDefaultObrigacoes(response.data?.obrigacoes));
+        const [requirementsResp, filesResp] = await Promise.all([
+          api.get(`/projects/${projectId}/requisitos`),
+          listFiles(projectId).catch(() => []),
+        ]);
+
+        const files = Array.isArray(filesResp) ? filesResp : [];
+        const byOriginalName = new Map<string, any>();
+        const byKey = new Map<string, any>();
+        const byLabelKey = new Map<string, any>();
+        files.forEach((file: any) => {
+          if (file?.originalName)
+            byOriginalName.set(String(file.originalName), file);
+          if (file?.s3Key) byKey.set(String(file.s3Key), file);
+          if (file?.labelKey) byLabelKey.set(String(file.labelKey), file);
+        });
+
+        const incomingCertidoes = buildDefaultCertidoes(
+          requirementsResp.data?.certidoes,
+        ).map((certidao) => {
+          const match =
+            (certidao.anexoS3Key && byKey.get(String(certidao.anexoS3Key))) ||
+            (certidao.anexoName &&
+              byOriginalName.get(String(certidao.anexoName)));
+
+          return {
+            ...certidao,
+            anexoS3Key: certidao.anexoS3Key || match?.s3Key || "",
+            anexoName: certidao.anexoName || match?.originalName || "",
+            anexo: null,
+          };
+        });
+
+        if (requirementsResp.data) {
+          setCertidoes(incomingCertidoes);
+
+          const incomingObrigacoes = buildDefaultObrigacoes(
+            requirementsResp.data?.obrigacoes,
+          ).map((o) => {
+            const idx = o.id;
+            const arquivoLabel = `requisitos.obrigacao.${idx}.arquivo`;
+            const arquivoPdfLabel = `requisitos.obrigacao.${idx}.arquivoPdf`;
+            const comprovanteLabel = `requisitos.obrigacao.${idx}.comprovante`;
+            const comprovantePdfLabel = `requisitos.obrigacao.${idx}.comprovantePdf`;
+
+            const arquivoMatch =
+              (o.arquivoS3Key && byKey.get(String(o.arquivoS3Key))) ||
+              (o.arquivoName && byOriginalName.get(String(o.arquivoName))) ||
+              byLabelKey.get(arquivoLabel);
+
+            const arquivoPdfMatch =
+              (o.arquivoPdfS3Key && byKey.get(String(o.arquivoPdfS3Key))) ||
+              (o.arquivoPdfName &&
+                byOriginalName.get(String(o.arquivoPdfName))) ||
+              byLabelKey.get(arquivoPdfLabel);
+
+            const comprovanteMatch =
+              (o.comprovanteS3Key && byKey.get(String(o.comprovanteS3Key))) ||
+              (o.comprovanteName &&
+                byOriginalName.get(String(o.comprovanteName))) ||
+              byLabelKey.get(comprovanteLabel);
+
+            const comprovantePdfMatch =
+              (o.comprovantePdfS3Key &&
+                byKey.get(String(o.comprovantePdfS3Key))) ||
+              (o.comprovantePdfName &&
+                byOriginalName.get(String(o.comprovantePdfName))) ||
+              byLabelKey.get(comprovantePdfLabel);
+
+            return {
+              ...o,
+              arquivoName: o.arquivoName || arquivoMatch?.originalName || "",
+              arquivoS3Key: o.arquivoS3Key || arquivoMatch?.s3Key || "",
+              arquivo: null,
+              arquivoPdfName:
+                o.arquivoPdfName || arquivoPdfMatch?.originalName || "",
+              arquivoPdfS3Key:
+                o.arquivoPdfS3Key || arquivoPdfMatch?.s3Key || "",
+              arquivoPdf: null,
+              comprovanteName:
+                o.comprovanteName || comprovanteMatch?.originalName || "",
+              comprovanteS3Key:
+                o.comprovanteS3Key || comprovanteMatch?.s3Key || "",
+              comprovante: null,
+              comprovantePdfName:
+                o.comprovantePdfName || comprovantePdfMatch?.originalName || "",
+              comprovantePdfS3Key:
+                o.comprovantePdfS3Key || comprovantePdfMatch?.s3Key || "",
+              comprovantePdf: null,
+            } as Obrigacao;
+          });
+
+          setObrigacoes(incomingObrigacoes);
         } else {
           setCertidoes(buildDefaultCertidoes(initial?.certidoes));
           setObrigacoes(buildDefaultObrigacoes(initial?.obrigacoes));
@@ -266,6 +367,149 @@ const RequisitosForm: React.FC<Props> = ({
   const removeCertidao = (id: number) =>
     setCertidoes((prev) => prev.filter((c) => c.id !== id));
 
+  const handleCertidaoFileChange = async (id: number, file: File | null) => {
+    updateCertidao(id, "anexo", file);
+
+    if (!file) {
+      updateCertidao(id, "anexoName", "");
+      updateCertidao(id, "anexoS3Key", "");
+      return;
+    }
+
+    updateCertidao(id, "anexoName", file.name);
+
+    if (!projectId) return;
+
+    try {
+      const presigned = await presign(
+        projectId,
+        file.name,
+        projectName,
+        "Requisitos",
+        "Certidão",
+      );
+
+      // Try direct S3 upload first
+      const uploadRes = await fetch(presigned.url, {
+        method: "PUT",
+        headers: {
+          "Content-Type": file.type || "application/octet-stream",
+        },
+        body: file,
+      });
+
+      if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
+
+      try {
+        await saveMetadata(projectId, {
+          key: presigned.key,
+          originalName: file.name,
+          mimeType: file.type,
+          size: file.size,
+          labelKey: `requisitos.certidao.${id}`,
+        });
+      } catch (metadataErr) {
+        console.error("Error saving requisito metadata:", metadataErr);
+      }
+
+      const nextCertidoes = certidoes.map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              anexo: file,
+              anexoName: file.name,
+              anexoS3Key: presigned.key,
+            }
+          : c,
+      );
+
+      updateCertidao(id, "anexoS3Key", presigned.key);
+
+      try {
+        await api.put(`/projects/${projectId}/requisitos`, {
+          certidoes: nextCertidoes,
+          obrigacoes,
+        });
+      } catch (saveErr) {
+        console.error("Error persisting requisito file metadata:", saveErr);
+        setToast({
+          type: "error",
+          message: "Arquivo enviado, mas não foi possível salvar a referência.",
+        });
+      }
+    } catch (err) {
+      // If direct S3 upload fails (CORS in dev), fallback to backend upload
+      console.error("S3 upload failed, attempting backend upload:", err);
+      try {
+        const backendRes: any = await uploadViaBackend(
+          projectId,
+          file,
+          projectName,
+          "Requisitos",
+          "Certidão",
+        );
+
+        const key = backendRes?.key;
+        if (!key) throw new Error("Backend upload did not return key");
+
+        try {
+          await saveMetadata(projectId, {
+            key,
+            originalName: file.name,
+            mimeType: file.type,
+            size: file.size,
+            labelKey: `requisitos.certidao.${id}`,
+          });
+        } catch (metadataErr) {
+          console.error(
+            "Error saving requisito metadata after backend upload:",
+            metadataErr,
+          );
+        }
+
+        const nextCertidoes = certidoes.map((c) =>
+          c.id === id
+            ? {
+                ...c,
+                anexo: file,
+                anexoName: file.name,
+                anexoS3Key: key,
+              }
+            : c,
+        );
+
+        updateCertidao(id, "anexoS3Key", key);
+
+        try {
+          await api.put(`/projects/${projectId}/requisitos`, {
+            certidoes: nextCertidoes,
+            obrigacoes,
+          });
+          setToast({
+            type: "success",
+            message: "Arquivo enviado via servidor.",
+          });
+        } catch (saveErr) {
+          console.error(
+            "Error persisting requisito file metadata after backend upload:",
+            saveErr,
+          );
+          setToast({
+            type: "error",
+            message:
+              "Arquivo enviado, mas não foi possível salvar a referência.",
+          });
+        }
+      } catch (backendErr) {
+        console.error("Backend upload failed:", backendErr);
+        setToast({
+          type: "error",
+          message: "Falha ao enviar o arquivo. Tente novamente.",
+        });
+      }
+    }
+  };
+
   // ── Obrigações ──────────────────────────────────────────────────────────────
 
   const updateObrigacao = (id: number, field: keyof Obrigacao, value: any) =>
@@ -294,6 +538,144 @@ const RequisitosForm: React.FC<Props> = ({
 
   const removeObrigacao = (id: number) =>
     setObrigacoes((prev) => prev.filter((o) => o.id !== id));
+
+  const handleObrigacaoFileChange = async (
+    id: number,
+    field: "arquivo" | "arquivoPdf" | "comprovante" | "comprovantePdf",
+    file: File | null,
+  ) => {
+    // update local file reference
+    updateObrigacao(id, field, file);
+
+    const nameField = field === "arquivo" ? "arquivoName" : field + "Name";
+    const s3KeyField =
+      field === "arquivo"
+        ? "arquivoS3Key"
+        : field === "arquivoPdf"
+          ? "arquivoPdfS3Key"
+          : field === "comprovante"
+            ? "comprovanteS3Key"
+            : "comprovantePdfS3Key";
+
+    if (!file) {
+      updateObrigacao(id, nameField as any, "");
+      updateObrigacao(id, s3KeyField as any, "");
+      return;
+    }
+
+    updateObrigacao(id, nameField as any, file.name);
+
+    if (!projectId) return;
+
+    try {
+      const presigned = await presign(
+        projectId,
+        file.name,
+        projectName,
+        "Requisitos",
+        `Obrigacao.${id}.${field}`,
+      );
+
+      const uploadRes = await fetch(presigned.url, {
+        method: "PUT",
+        headers: {
+          "Content-Type": file.type || "application/octet-stream",
+        },
+        body: file,
+      });
+
+      if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
+
+      try {
+        await saveMetadata(projectId, {
+          key: presigned.key,
+          originalName: file.name,
+          mimeType: file.type,
+          size: file.size,
+          labelKey: `requisitos.obrigacao.${id}.${field}`,
+        });
+      } catch (metadataErr) {
+        console.error("Error saving obrigacao metadata:", metadataErr);
+      }
+
+      updateObrigacao(id, s3KeyField as any, presigned.key);
+
+      // persist requisitos
+      try {
+        await api.put(`/projects/${projectId}/requisitos`, {
+          certidoes,
+          obrigacoes: obrigacoes.map((o) => (o.id === id ? { ...o } : o)),
+        });
+      } catch (saveErr) {
+        console.error("Error persisting obrigacao file metadata:", saveErr);
+        setToast({
+          type: "error",
+          message: "Arquivo enviado, mas não foi possível salvar a referência.",
+        });
+      }
+    } catch (err) {
+      console.error(
+        "S3 upload failed, attempting backend upload for obrigacao:",
+        err,
+      );
+      try {
+        const backendRes: any = await uploadViaBackend(
+          projectId,
+          file,
+          projectName,
+          "Requisitos",
+          `Obrigacao.${id}.${field}`,
+        );
+
+        const key = backendRes?.key;
+        if (!key) throw new Error("Backend upload did not return key");
+
+        try {
+          await saveMetadata(projectId, {
+            key,
+            originalName: file.name,
+            mimeType: file.type,
+            size: file.size,
+            labelKey: `requisitos.obrigacao.${id}.${field}`,
+          });
+        } catch (metadataErr) {
+          console.error(
+            "Error saving obrigacao metadata after backend upload:",
+            metadataErr,
+          );
+        }
+
+        updateObrigacao(id, s3KeyField as any, key);
+
+        try {
+          await api.put(`/projects/${projectId}/requisitos`, {
+            certidoes,
+            obrigacoes: obrigacoes.map((o) => (o.id === id ? { ...o } : o)),
+          });
+          setToast({
+            type: "success",
+            message: "Arquivo enviado via servidor.",
+          });
+        } catch (saveErr) {
+          console.error(
+            "Error persisting obrigacao file metadata after backend upload:",
+            saveErr,
+          );
+          setToast({
+            type: "error",
+            message:
+              "Arquivo enviado, mas não foi possível salvar a referência.",
+          });
+        }
+      } catch (backendErr) {
+        console.error("Backend upload failed for obrigacao:", backendErr);
+        setToast({
+          type: "error",
+          message: "Falha ao enviar o arquivo. Tente novamente.",
+        });
+      }
+    }
+  };
 
   // ── Submit ──────────────────────────────────────────────────────────────────
 
@@ -341,6 +723,20 @@ const RequisitosForm: React.FC<Props> = ({
       onSubmit={submit}
       sx={{ display: "flex", flexDirection: "column", gap: 0 }}
     >
+      <Snackbar
+        open={!!toast}
+        autoHideDuration={4000}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+        onClose={() => setToast(null)}
+      >
+        <Alert
+          severity={toast?.type || "success"}
+          onClose={() => setToast(null)}
+        >
+          {toast?.message || ""}
+        </Alert>
+      </Snackbar>
+
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
@@ -365,7 +761,11 @@ const RequisitosForm: React.FC<Props> = ({
             {certidoes.map((c) => (
               <Paper
                 key={c.id}
-                sx={{ p: 2, bgcolor: "#f9f9f9", border: "1px solid #e0e0e0" }}
+                sx={{
+                  p: 2,
+                  bgcolor: c.isRequested ? "#ffffff" : "#f3f3f3",
+                  border: "1px solid #e0e0e0",
+                }}
               >
                 <Grid container spacing={2} alignItems="center">
                   {/* Solicitar */}
@@ -390,7 +790,7 @@ const RequisitosForm: React.FC<Props> = ({
                   </Grid>
 
                   {/* Descrição */}
-                  <Grid item xs={12} md={4}>
+                  <Grid item xs={12} md={3}>
                     <TextField
                       fullWidth
                       size="small"
@@ -399,7 +799,7 @@ const RequisitosForm: React.FC<Props> = ({
                       onChange={(e) =>
                         updateCertidao(c.id, "descricao", e.target.value)
                       }
-                      disabled={readOnly}
+                      disabled={readOnly || !(c.isRequested ?? false)}
                     />
                   </Grid>
 
@@ -414,7 +814,7 @@ const RequisitosForm: React.FC<Props> = ({
                       onChange={(e) =>
                         updateCertidao(c.id, "dataValidade", e.target.value)
                       }
-                      disabled={readOnly}
+                      disabled={readOnly || !(c.isRequested ?? false)}
                       InputLabelProps={{ shrink: true }}
                     />
                   </Grid>
@@ -426,8 +826,8 @@ const RequisitosForm: React.FC<Props> = ({
                       file={c.anexo}
                       fileName={c.anexoName}
                       s3Key={c.anexoS3Key}
-                      onChange={(file) => updateCertidao(c.id, "anexo", file)}
-                      disabled={readOnly}
+                      onChange={(file) => handleCertidaoFileChange(c.id, file)}
+                      disabled={readOnly || !(c.isRequested ?? false)}
                     />
                   </Grid>
 
@@ -437,11 +837,29 @@ const RequisitosForm: React.FC<Props> = ({
                       variant="outlined"
                       size="small"
                       fullWidth
-                      disabled={readOnly}
+                      disabled={readOnly || !(c.isRequested ?? false)}
                       sx={{ textTransform: "none" }}
                     >
                       {t("requisitos.buyEmission", "Comprar Emissão")}
                     </Button>
+                  </Grid>
+
+                  {/* Visualizar */}
+                  <Grid item xs={12} md={1}>
+                    {c.isRequested &&
+                      (c.anexo || c.anexoName || c.anexoS3Key) && (
+                        <Box sx={{ display: "flex", justifyContent: "center" }}>
+                          <FilePreview
+                            projectId={projectId}
+                            file={c.anexo}
+                            fileName={c.anexo?.name || c.anexoName || null}
+                            s3Key={c.anexoS3Key || null}
+                            onError={(message) =>
+                              setToast({ type: "error", message })
+                            }
+                          />
+                        </Box>
+                      )}
                   </Grid>
 
                   {/* Delete */}
@@ -494,7 +912,11 @@ const RequisitosForm: React.FC<Props> = ({
             {obrigacoes.map((o) => (
               <Paper
                 key={o.id}
-                sx={{ p: 2, bgcolor: "#f9f9f9", border: "1px solid #e0e0e0" }}
+                sx={{
+                  p: 2,
+                  bgcolor: o.isRequested ? "#ffffff" : "#f3f3f3",
+                  border: "1px solid #e0e0e0",
+                }}
               >
                 <Grid container spacing={2} alignItems="flex-start">
                   {/* Solicitar */}
@@ -531,7 +953,7 @@ const RequisitosForm: React.FC<Props> = ({
                       onChange={(e) =>
                         updateObrigacao(o.id, "nome", e.target.value)
                       }
-                      disabled={readOnly}
+                      disabled={readOnly || !(o.isRequested ?? false)}
                     />
                   </Grid>
 
@@ -549,7 +971,7 @@ const RequisitosForm: React.FC<Props> = ({
                       onChange={(e) =>
                         updateObrigacao(o.id, "competencia", e.target.value)
                       }
-                      disabled={readOnly}
+                      disabled={readOnly || !(o.isRequested ?? false)}
                     />
                   </Grid>
 
@@ -562,19 +984,21 @@ const RequisitosForm: React.FC<Props> = ({
                             label={t("requisitos.file", "Arquivo")}
                             file={o.arquivo}
                             fileName={o.arquivoName}
+                            s3Key={o.arquivoS3Key}
                             onChange={(f) =>
-                              updateObrigacao(o.id, "arquivo", f)
+                              handleObrigacaoFileChange(o.id, "arquivo", f)
                             }
-                            disabled={readOnly}
+                            disabled={readOnly || !(o.isRequested ?? false)}
                           />
                           <FileAttachButton
                             label={t("requisitos.voucher", "Comprovante")}
                             file={o.comprovante}
                             fileName={o.comprovanteName}
+                            s3Key={o.comprovanteS3Key}
                             onChange={(f) =>
-                              updateObrigacao(o.id, "comprovante", f)
+                              handleObrigacaoFileChange(o.id, "comprovante", f)
                             }
-                            disabled={readOnly}
+                            disabled={readOnly || !(o.isRequested ?? false)}
                           />
                         </Stack>
                       </Grid>
@@ -584,10 +1008,11 @@ const RequisitosForm: React.FC<Props> = ({
                             label={t("requisitos.filePdf", "Arquivo Pdf")}
                             file={o.arquivoPdf}
                             fileName={o.arquivoPdfName}
+                            s3Key={o.arquivoPdfS3Key}
                             onChange={(f) =>
-                              updateObrigacao(o.id, "arquivoPdf", f)
+                              handleObrigacaoFileChange(o.id, "arquivoPdf", f)
                             }
-                            disabled={readOnly}
+                            disabled={readOnly || !(o.isRequested ?? false)}
                           />
                           <FileAttachButton
                             label={t(
@@ -596,10 +1021,15 @@ const RequisitosForm: React.FC<Props> = ({
                             )}
                             file={o.comprovantePdf}
                             fileName={o.comprovantePdfName}
+                            s3Key={o.comprovantePdfS3Key}
                             onChange={(f) =>
-                              updateObrigacao(o.id, "comprovantePdf", f)
+                              handleObrigacaoFileChange(
+                                o.id,
+                                "comprovantePdf",
+                                f,
+                              )
                             }
-                            disabled={readOnly}
+                            disabled={readOnly || !(o.isRequested ?? false)}
                           />
                         </Stack>
                       </Grid>

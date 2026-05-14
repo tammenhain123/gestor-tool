@@ -258,9 +258,12 @@ const ProjectDetail: React.FC = () => {
               <CapacidadeForm projectId={id} projectName={project?.name} />
             ) : i === 4 ? (
               <RequisitosForm
-                onSave={(data) => {
+                projectId={id}
+                projectName={project?.name}
+                onSave={async (data) => {
                   console.log("Requisitos saved", data);
-                  alert("Requisitos salvos (simulado)");
+                  setToast({ type: "success", message: "Requisitos salvos" });
+                  return data;
                 }}
               />
             ) : i === 5 ? (
@@ -333,6 +336,7 @@ const ProjectDetail: React.FC = () => {
         <Snackbar
           open={!!toast}
           autoHideDuration={4000}
+          anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
           onClose={() => setToast(null)}
         >
           {toast ? (
