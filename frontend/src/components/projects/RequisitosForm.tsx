@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
 import Grid from "@mui/material/Grid";
@@ -9,10 +9,15 @@ import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
 import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import CircularProgress from "@mui/material/CircularProgress";
+import Alert from "@mui/material/Alert";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import FilePreview from "../../components/common/FilePreview";
+import { api } from "../../services/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,6 +28,7 @@ interface Certidao {
   anexo: File | null;
   anexoName: string;
   anexoS3Key: string;
+  isRequested?: boolean;
 }
 
 interface Obrigacao {
@@ -37,11 +43,14 @@ interface Obrigacao {
   comprovanteName: string;
   comprovantePdf: File | null;
   comprovantePdfName: string;
+  isRequested?: boolean;
 }
 
 type Props = {
+  projectId: string;
+  projectName?: string;
   initial?: any;
-  onSave?: (data: any) => void;
+  onSave?: (data: any) => Promise<any> | void;
   readOnly?: boolean;
 };
 
@@ -54,6 +63,7 @@ const DEFAULT_CERTIDOES: Omit<Certidao, "id">[] = [
     anexo: null,
     anexoName: "",
     anexoS3Key: "",
+    isRequested: false,
   },
   {
     descricao: "Certidão de regularidade fiscal estadual (CND estadual)",
@@ -61,6 +71,7 @@ const DEFAULT_CERTIDOES: Omit<Certidao, "id">[] = [
     anexo: null,
     anexoName: "",
     anexoS3Key: "",
+    isRequested: false,
   },
   {
     descricao: "Certidão da Receita Federal (CND da Receita Federal)",
@@ -68,6 +79,7 @@ const DEFAULT_CERTIDOES: Omit<Certidao, "id">[] = [
     anexo: null,
     anexoName: "",
     anexoS3Key: "",
+    isRequested: false,
   },
   {
     descricao: "Certidão de regularidade com relação ao FGTS (CND FGTS)",
@@ -75,6 +87,7 @@ const DEFAULT_CERTIDOES: Omit<Certidao, "id">[] = [
     anexo: null,
     anexoName: "",
     anexoS3Key: "",
+    isRequested: false,
   },
   {
     descricao: "Certidão Negativa de Débitos Trabalhistas (CNDT)",
@@ -82,6 +95,7 @@ const DEFAULT_CERTIDOES: Omit<Certidao, "id">[] = [
     anexo: null,
     anexoName: "",
     anexoS3Key: "",
+    isRequested: false,
   },
   {
     descricao: "Certidão Negativa de Tributos Mobiliários e Imobiliários",
@@ -89,6 +103,7 @@ const DEFAULT_CERTIDOES: Omit<Certidao, "id">[] = [
     anexo: null,
     anexoName: "",
     anexoS3Key: "",
+    isRequested: false,
   },
 ];
 
@@ -169,6 +184,8 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const RequisitosForm: React.FC<Props> = ({
+  projectId,
+  projectName,
   initial,
   onSave,
   readOnly = false,
@@ -181,6 +198,49 @@ const RequisitosForm: React.FC<Props> = ({
   const [obrigacoes, setObrigacoes] = useState<Obrigacao[]>(() =>
     buildDefaultObrigacoes(initial?.obrigacoes),
   );
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // ── Load requisitos on mount ────────────────────────────────────────────────
+
+  useEffect(() => {
+    const loadRequisitos = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await api.get(`/projects/${projectId}/requisitos`);
+        if (response.data) {
+          setCertidoes(buildDefaultCertidoes(response.data?.certidoes));
+          setObrigacoes(buildDefaultObrigacoes(response.data?.obrigacoes));
+        } else {
+          setCertidoes(buildDefaultCertidoes(initial?.certidoes));
+          setObrigacoes(buildDefaultObrigacoes(initial?.obrigacoes));
+        }
+      } catch (err: any) {
+        if (err.response?.status === 404) {
+          // No requisitos yet
+          setCertidoes(buildDefaultCertidoes(initial?.certidoes));
+          setObrigacoes(buildDefaultObrigacoes(initial?.obrigacoes));
+        } else {
+          console.error("Error loading requisitos:", err);
+          setError(
+            err.response?.data?.message ||
+              err.message ||
+              "Failed to load requisitos",
+          );
+          setCertidoes(buildDefaultCertidoes(initial?.certidoes));
+          setObrigacoes(buildDefaultObrigacoes(initial?.obrigacoes));
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (projectId) {
+      loadRequisitos();
+    }
+  }, [projectId, initial]);
 
   // ── Certidões ───────────────────────────────────────────────────────────────
 
@@ -199,6 +259,7 @@ const RequisitosForm: React.FC<Props> = ({
         anexo: null,
         anexoName: "",
         anexoS3Key: "",
+        isRequested: false,
       },
     ]);
 
@@ -227,6 +288,7 @@ const RequisitosForm: React.FC<Props> = ({
         comprovanteName: "",
         comprovantePdf: null,
         comprovantePdfName: "",
+        isRequested: false,
       },
     ]);
 
@@ -235,12 +297,43 @@ const RequisitosForm: React.FC<Props> = ({
 
   // ── Submit ──────────────────────────────────────────────────────────────────
 
-  const submit = (e?: React.FormEvent) => {
+  const submit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (onSave) onSave({ certidoes, obrigacoes });
+    if (readOnly) return;
+
+    try {
+      setSaving(true);
+      setError(null);
+
+      await api.put(`/projects/${projectId}/requisitos`, {
+        certidoes,
+        obrigacoes,
+      });
+
+      if (onSave) {
+        await onSave({ certidoes, obrigacoes });
+      }
+    } catch (err: any) {
+      console.error("Error saving requisitos:", err);
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to save requisitos",
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ─── Render ─────────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", p: 3 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box
@@ -248,6 +341,12 @@ const RequisitosForm: React.FC<Props> = ({
       onSubmit={submit}
       sx={{ display: "flex", flexDirection: "column", gap: 0 }}
     >
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
       {/* ══════════════════════════════════════════════════════
           SEÇÃO 1 — Lista de Certidões
       ══════════════════════════════════════════════════════ */}
@@ -269,8 +368,29 @@ const RequisitosForm: React.FC<Props> = ({
                 sx={{ p: 2, bgcolor: "#f9f9f9", border: "1px solid #e0e0e0" }}
               >
                 <Grid container spacing={2} alignItems="center">
+                  {/* Solicitar */}
+                  <Grid item xs={12} md={1}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={c.isRequested ?? false}
+                          onChange={(e) =>
+                            updateCertidao(
+                              c.id,
+                              "isRequested",
+                              e.target.checked,
+                            )
+                          }
+                          disabled={readOnly}
+                        />
+                      }
+                      label={t("common.request", "Solicitar")}
+                      sx={{ m: 0 }}
+                    />
+                  </Grid>
+
                   {/* Descrição */}
-                  <Grid item xs={12} md={5}>
+                  <Grid item xs={12} md={4}>
                     <TextField
                       fullWidth
                       size="small"
@@ -377,8 +497,29 @@ const RequisitosForm: React.FC<Props> = ({
                 sx={{ p: 2, bgcolor: "#f9f9f9", border: "1px solid #e0e0e0" }}
               >
                 <Grid container spacing={2} alignItems="flex-start">
+                  {/* Solicitar */}
+                  <Grid item xs={12} md={1}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={o.isRequested ?? false}
+                          onChange={(e) =>
+                            updateObrigacao(
+                              o.id,
+                              "isRequested",
+                              e.target.checked,
+                            )
+                          }
+                          disabled={readOnly}
+                        />
+                      }
+                      label={t("common.request", "Solicitar")}
+                      sx={{ m: 0, mt: 1 }}
+                    />
+                  </Grid>
+
                   {/* Nome */}
-                  <Grid item xs={12} md={3}>
+                  <Grid item xs={12} md={2}>
                     <TextField
                       fullWidth
                       size="small"
@@ -413,7 +554,7 @@ const RequisitosForm: React.FC<Props> = ({
                   </Grid>
 
                   {/* Arquivos — 2×2 igual ao protótipo */}
-                  <Grid item xs={12} md={6}>
+                  <Grid item xs={12} md={5}>
                     <Grid container spacing={2}>
                       <Grid item xs={6}>
                         <Stack spacing={1}>
@@ -499,8 +640,15 @@ const RequisitosForm: React.FC<Props> = ({
 
       {/* ── Salvar ── */}
       <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
-        <Button type="submit" variant="contained" disabled={readOnly}>
-          {t("requisitos.save", "Salvar")}
+        <Button type="submit" variant="contained" disabled={readOnly || saving}>
+          {saving ? (
+            <>
+              <CircularProgress size={20} sx={{ mr: 1 }} />
+              {t("common.saving", "Salvando...")}
+            </>
+          ) : (
+            t("requisitos.save", "Salvar")
+          )}
         </Button>
       </Box>
     </Box>
