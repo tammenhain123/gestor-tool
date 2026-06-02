@@ -9,15 +9,12 @@ import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
 import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
-import Checkbox from "@mui/material/Checkbox";
-import FormControlLabel from "@mui/material/FormControlLabel";
 import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
 import Snackbar from "@mui/material/Snackbar";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
-import AttachFileIcon from "@mui/icons-material/AttachFile";
-import FilePreview from "../../components/common/FilePreview";
+import AttachmentControl from "../../components/common/AttachmentControl";
 import { api } from "../../services/api";
 import {
   list as listFiles,
@@ -36,6 +33,9 @@ interface Certidao {
   anexoName: string;
   anexoS3Key: string;
   isRequested?: boolean;
+  uploadedBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface Obrigacao {
@@ -55,6 +55,14 @@ interface Obrigacao {
   comprovantePdfName: string;
   comprovantePdfS3Key?: string;
   isRequested?: boolean;
+  arquivoUploadedBy?: string;
+  arquivoCreatedAt?: string;
+  arquivoPdfUploadedBy?: string;
+  arquivoPdfCreatedAt?: string;
+  comprovanteUploadedBy?: string;
+  comprovanteCreatedAt?: string;
+  comprovantePdfUploadedBy?: string;
+  comprovantePdfCreatedAt?: string;
 }
 
 type Props = {
@@ -133,58 +141,6 @@ const buildDefaultObrigacoes = (initial?: any[]): Obrigacao[] => {
   return [];
 };
 
-// ─── FileAttachButton ─────────────────────────────────────────────────────────
-
-interface FileAttachButtonProps {
-  label: string;
-  file: File | null;
-  fileName?: string;
-  s3Key?: string;
-  onChange: (file: File | null) => void;
-  disabled?: boolean;
-}
-
-const FileAttachButton: React.FC<FileAttachButtonProps> = ({
-  label,
-  file,
-  fileName,
-  s3Key,
-  onChange,
-  disabled,
-}) => (
-  <Stack spacing={0.5}>
-    <Button
-      variant="outlined"
-      component="label"
-      size="small"
-      disabled={disabled}
-      startIcon={<AttachFileIcon />}
-      sx={{ textTransform: "none", whiteSpace: "nowrap" }}
-    >
-      {label}
-      <input
-        type="file"
-        hidden
-        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-      />
-    </Button>
-    {(file || fileName || s3Key) && (
-      <Typography
-        variant="caption"
-        sx={{
-          color: "#666",
-          maxWidth: 140,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {file?.name || fileName || s3Key}
-      </Typography>
-    )}
-  </Stack>
-);
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const RequisitosForm: React.FC<Props> = ({
@@ -250,6 +206,9 @@ const RequisitosForm: React.FC<Props> = ({
             ...certidao,
             anexoS3Key: certidao.anexoS3Key || match?.s3Key || "",
             anexoName: certidao.anexoName || match?.originalName || "",
+            uploadedBy: match?.uploadedBy || certidao.uploadedBy,
+            createdAt: match?.createdAt || certidao.createdAt,
+            updatedAt: match?.updatedAt || certidao.updatedAt,
             anexo: null,
           };
         });
@@ -294,21 +253,35 @@ const RequisitosForm: React.FC<Props> = ({
               ...o,
               arquivoName: o.arquivoName || arquivoMatch?.originalName || "",
               arquivoS3Key: o.arquivoS3Key || arquivoMatch?.s3Key || "",
+              arquivoUploadedBy: arquivoMatch?.uploadedBy || o.arquivoUploadedBy,
+              arquivoCreatedAt: arquivoMatch?.createdAt || o.arquivoCreatedAt,
               arquivo: null,
               arquivoPdfName:
                 o.arquivoPdfName || arquivoPdfMatch?.originalName || "",
               arquivoPdfS3Key:
                 o.arquivoPdfS3Key || arquivoPdfMatch?.s3Key || "",
+              arquivoPdfUploadedBy:
+                arquivoPdfMatch?.uploadedBy || o.arquivoPdfUploadedBy,
+              arquivoPdfCreatedAt:
+                arquivoPdfMatch?.createdAt || o.arquivoPdfCreatedAt,
               arquivoPdf: null,
               comprovanteName:
                 o.comprovanteName || comprovanteMatch?.originalName || "",
               comprovanteS3Key:
                 o.comprovanteS3Key || comprovanteMatch?.s3Key || "",
+              comprovanteUploadedBy:
+                comprovanteMatch?.uploadedBy || o.comprovanteUploadedBy,
+              comprovanteCreatedAt:
+                comprovanteMatch?.createdAt || o.comprovanteCreatedAt,
               comprovante: null,
               comprovantePdfName:
                 o.comprovantePdfName || comprovantePdfMatch?.originalName || "",
               comprovantePdfS3Key:
                 o.comprovantePdfS3Key || comprovantePdfMatch?.s3Key || "",
+              comprovantePdfUploadedBy:
+                comprovantePdfMatch?.uploadedBy || o.comprovantePdfUploadedBy,
+              comprovantePdfCreatedAt:
+                comprovantePdfMatch?.createdAt || o.comprovantePdfCreatedAt,
               comprovantePdf: null,
             } as Obrigacao;
           });
@@ -400,8 +373,9 @@ const RequisitosForm: React.FC<Props> = ({
 
       if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
 
+      let savedMeta: any = null;
       try {
-        await saveMetadata(projectId, {
+        savedMeta = await saveMetadata(projectId, {
           key: presigned.key,
           originalName: file.name,
           mimeType: file.type,
@@ -419,11 +393,16 @@ const RequisitosForm: React.FC<Props> = ({
               anexo: file,
               anexoName: file.name,
               anexoS3Key: presigned.key,
+              uploadedBy: savedMeta?.uploadedBy || c.uploadedBy,
+              createdAt: savedMeta?.createdAt || c.createdAt,
+              updatedAt: savedMeta?.updatedAt || c.updatedAt,
             }
           : c,
       );
 
       updateCertidao(id, "anexoS3Key", presigned.key);
+      updateCertidao(id, "uploadedBy", savedMeta?.uploadedBy);
+      updateCertidao(id, "createdAt", savedMeta?.createdAt || savedMeta?.updatedAt);
 
       try {
         await api.put(`/projects/${projectId}/requisitos`, {
@@ -452,8 +431,9 @@ const RequisitosForm: React.FC<Props> = ({
         const key = backendRes?.key;
         if (!key) throw new Error("Backend upload did not return key");
 
+        let savedMeta: any = null;
         try {
-          await saveMetadata(projectId, {
+          savedMeta = await saveMetadata(projectId, {
             key,
             originalName: file.name,
             mimeType: file.type,
@@ -474,11 +454,16 @@ const RequisitosForm: React.FC<Props> = ({
                 anexo: file,
                 anexoName: file.name,
                 anexoS3Key: key,
+                uploadedBy: savedMeta?.uploadedBy || c.uploadedBy,
+                createdAt: savedMeta?.createdAt || c.createdAt,
+                updatedAt: savedMeta?.updatedAt || c.updatedAt,
               }
             : c,
         );
 
         updateCertidao(id, "anexoS3Key", key);
+        updateCertidao(id, "uploadedBy", savedMeta?.uploadedBy);
+        updateCertidao(id, "createdAt", savedMeta?.createdAt || savedMeta?.updatedAt);
 
         try {
           await api.put(`/projects/${projectId}/requisitos`, {
@@ -586,8 +571,9 @@ const RequisitosForm: React.FC<Props> = ({
 
       if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
 
+      let savedMeta: any = null;
       try {
-        await saveMetadata(projectId, {
+        savedMeta = await saveMetadata(projectId, {
           key: presigned.key,
           originalName: file.name,
           mimeType: file.type,
@@ -599,6 +585,8 @@ const RequisitosForm: React.FC<Props> = ({
       }
 
       updateObrigacao(id, s3KeyField as any, presigned.key);
+      updateObrigacao(id, `${field}UploadedBy` as any, savedMeta?.uploadedBy);
+      updateObrigacao(id, `${field}CreatedAt` as any, savedMeta?.createdAt || savedMeta?.updatedAt);
 
       // persist requisitos
       try {
@@ -630,8 +618,9 @@ const RequisitosForm: React.FC<Props> = ({
         const key = backendRes?.key;
         if (!key) throw new Error("Backend upload did not return key");
 
+        let savedMeta: any = null;
         try {
-          await saveMetadata(projectId, {
+          savedMeta = await saveMetadata(projectId, {
             key,
             originalName: file.name,
             mimeType: file.type,
@@ -646,6 +635,8 @@ const RequisitosForm: React.FC<Props> = ({
         }
 
         updateObrigacao(id, s3KeyField as any, key);
+        updateObrigacao(id, `${field}UploadedBy` as any, savedMeta?.uploadedBy);
+        updateObrigacao(id, `${field}CreatedAt` as any, savedMeta?.createdAt || savedMeta?.updatedAt);
 
         try {
           await api.put(`/projects/${projectId}/requisitos`, {
@@ -763,44 +754,16 @@ const RequisitosForm: React.FC<Props> = ({
                 key={c.id}
                 sx={{
                   p: 2,
-                  bgcolor: c.isRequested ? "#ffffff" : "#f3f3f3",
+                  bgcolor: "#ffffff",
                   border: "1px solid #e0e0e0",
                 }}
               >
                 <Grid container spacing={2} alignItems="center">
-                  {/* Solicitar */}
-                  <Grid item xs={12} md={1}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={c.isRequested ?? false}
-                          onChange={(e) =>
-                            updateCertidao(
-                              c.id,
-                              "isRequested",
-                              e.target.checked,
-                            )
-                          }
-                          disabled={readOnly}
-                        />
-                      }
-                      label={t("common.request", "Solicitar")}
-                      sx={{ m: 0 }}
-                    />
-                  </Grid>
-
                   {/* Descrição */}
                   <Grid item xs={12} md={3}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label={t("requisitos.description", "Descrição")}
-                      value={c.descricao}
-                      onChange={(e) =>
-                        updateCertidao(c.id, "descricao", e.target.value)
-                      }
-                      disabled={readOnly || !(c.isRequested ?? false)}
-                    />
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {c.descricao}
+                    </Typography>
                   </Grid>
 
                   {/* Data de Validade */}
@@ -814,20 +777,24 @@ const RequisitosForm: React.FC<Props> = ({
                       onChange={(e) =>
                         updateCertidao(c.id, "dataValidade", e.target.value)
                       }
-                      disabled={readOnly || !(c.isRequested ?? false)}
+                      disabled={readOnly}
                       InputLabelProps={{ shrink: true }}
                     />
                   </Grid>
 
                   {/* Anexo */}
-                  <Grid item xs={12} md={2}>
-                    <FileAttachButton
-                      label={t("requisitos.attach", "Anexar")}
+                  <Grid item xs={12} md={4}>
+                    <AttachmentControl
+                      projectId={projectId}
+                      buttonLabel={t("requisitos.attach", "Anexar")}
                       file={c.anexo}
                       fileName={c.anexoName}
                       s3Key={c.anexoS3Key}
                       onChange={(file) => handleCertidaoFileChange(c.id, file)}
-                      disabled={readOnly || !(c.isRequested ?? false)}
+                      disabled={readOnly}
+                      uploadedBy={c.uploadedBy}
+                      uploadedAt={c.createdAt || c.updatedAt}
+                      onError={(message) => setToast({ type: "error", message })}
                     />
                   </Grid>
 
@@ -837,29 +804,11 @@ const RequisitosForm: React.FC<Props> = ({
                       variant="outlined"
                       size="small"
                       fullWidth
-                      disabled={readOnly || !(c.isRequested ?? false)}
+                      disabled={readOnly}
                       sx={{ textTransform: "none" }}
                     >
                       {t("requisitos.buyEmission", "Comprar Emissão")}
                     </Button>
-                  </Grid>
-
-                  {/* Visualizar */}
-                  <Grid item xs={12} md={1}>
-                    {c.isRequested &&
-                      (c.anexo || c.anexoName || c.anexoS3Key) && (
-                        <Box sx={{ display: "flex", justifyContent: "center" }}>
-                          <FilePreview
-                            projectId={projectId}
-                            file={c.anexo}
-                            fileName={c.anexo?.name || c.anexoName || null}
-                            s3Key={c.anexoS3Key || null}
-                            onError={(message) =>
-                              setToast({ type: "error", message })
-                            }
-                          />
-                        </Box>
-                      )}
                   </Grid>
 
                   {/* Delete */}
@@ -914,32 +863,11 @@ const RequisitosForm: React.FC<Props> = ({
                 key={o.id}
                 sx={{
                   p: 2,
-                  bgcolor: o.isRequested ? "#ffffff" : "#f3f3f3",
+                  bgcolor: "#ffffff",
                   border: "1px solid #e0e0e0",
                 }}
               >
                 <Grid container spacing={2} alignItems="flex-start">
-                  {/* Solicitar */}
-                  <Grid item xs={12} md={1}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={o.isRequested ?? false}
-                          onChange={(e) =>
-                            updateObrigacao(
-                              o.id,
-                              "isRequested",
-                              e.target.checked,
-                            )
-                          }
-                          disabled={readOnly}
-                        />
-                      }
-                      label={t("common.request", "Solicitar")}
-                      sx={{ m: 0, mt: 1 }}
-                    />
-                  </Grid>
-
                   {/* Nome */}
                   <Grid item xs={12} md={2}>
                     <TextField
@@ -953,7 +881,7 @@ const RequisitosForm: React.FC<Props> = ({
                       onChange={(e) =>
                         updateObrigacao(o.id, "nome", e.target.value)
                       }
-                      disabled={readOnly || !(o.isRequested ?? false)}
+                      disabled={readOnly}
                     />
                   </Grid>
 
@@ -971,7 +899,7 @@ const RequisitosForm: React.FC<Props> = ({
                       onChange={(e) =>
                         updateObrigacao(o.id, "competencia", e.target.value)
                       }
-                      disabled={readOnly || !(o.isRequested ?? false)}
+                      disabled={readOnly}
                     />
                   </Grid>
 
@@ -980,42 +908,55 @@ const RequisitosForm: React.FC<Props> = ({
                     <Grid container spacing={2}>
                       <Grid item xs={6}>
                         <Stack spacing={1}>
-                          <FileAttachButton
-                            label={t("requisitos.file", "Arquivo")}
+                          <AttachmentControl
+                            projectId={projectId}
+                            buttonLabel={t("requisitos.file", "Arquivo")}
                             file={o.arquivo}
                             fileName={o.arquivoName}
                             s3Key={o.arquivoS3Key}
                             onChange={(f) =>
                               handleObrigacaoFileChange(o.id, "arquivo", f)
                             }
-                            disabled={readOnly || !(o.isRequested ?? false)}
+                            disabled={readOnly}
+                            uploadedBy={o.arquivoUploadedBy}
+                            uploadedAt={o.arquivoCreatedAt}
+                            onError={(message) => setToast({ type: "error", message })}
                           />
-                          <FileAttachButton
-                            label={t("requisitos.voucher", "Comprovante")}
+                          <AttachmentControl
+                            projectId={projectId}
+                            buttonLabel={t("requisitos.voucher", "Comprovante")}
                             file={o.comprovante}
                             fileName={o.comprovanteName}
                             s3Key={o.comprovanteS3Key}
                             onChange={(f) =>
                               handleObrigacaoFileChange(o.id, "comprovante", f)
                             }
-                            disabled={readOnly || !(o.isRequested ?? false)}
+                            disabled={readOnly}
+                            uploadedBy={o.comprovanteUploadedBy}
+                            uploadedAt={o.comprovanteCreatedAt}
+                            onError={(message) => setToast({ type: "error", message })}
                           />
                         </Stack>
                       </Grid>
                       <Grid item xs={6}>
                         <Stack spacing={1}>
-                          <FileAttachButton
-                            label={t("requisitos.filePdf", "Arquivo Pdf")}
+                          <AttachmentControl
+                            projectId={projectId}
+                            buttonLabel={t("requisitos.filePdf", "Arquivo Pdf")}
                             file={o.arquivoPdf}
                             fileName={o.arquivoPdfName}
                             s3Key={o.arquivoPdfS3Key}
                             onChange={(f) =>
                               handleObrigacaoFileChange(o.id, "arquivoPdf", f)
                             }
-                            disabled={readOnly || !(o.isRequested ?? false)}
+                            disabled={readOnly}
+                            uploadedBy={o.arquivoPdfUploadedBy}
+                            uploadedAt={o.arquivoPdfCreatedAt}
+                            onError={(message) => setToast({ type: "error", message })}
                           />
-                          <FileAttachButton
-                            label={t(
+                          <AttachmentControl
+                            projectId={projectId}
+                            buttonLabel={t(
                               "requisitos.voucherPdf",
                               "Comprovante Pdf",
                             )}
@@ -1029,7 +970,10 @@ const RequisitosForm: React.FC<Props> = ({
                                 f,
                               )
                             }
-                            disabled={readOnly || !(o.isRequested ?? false)}
+                            disabled={readOnly}
+                            uploadedBy={o.comprovantePdfUploadedBy}
+                            uploadedAt={o.comprovantePdfCreatedAt}
+                            onError={(message) => setToast({ type: "error", message })}
                           />
                         </Stack>
                       </Grid>
