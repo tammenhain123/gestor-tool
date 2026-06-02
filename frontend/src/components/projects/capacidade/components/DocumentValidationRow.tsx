@@ -1,19 +1,17 @@
 import React from "react";
-import Box from "@mui/material/Box";
-import Checkbox from "@mui/material/Checkbox";
-import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
-import IconButton from "@mui/material/IconButton";
-import Tooltip from "@mui/material/Tooltip";
-import Radio from "@mui/material/Radio";
-import FormControlLabel from "@mui/material/FormControlLabel";
-import RadioGroup from "@mui/material/RadioGroup";
 import Grid from "@mui/material/Grid";
+import IconButton from "@mui/material/IconButton";
 import Paper from "@mui/material/Paper";
-import AttachFileIcon from "@mui/icons-material/AttachFile";
+import Radio from "@mui/material/Radio";
+import RadioGroup from "@mui/material/RadioGroup";
+import TextField from "@mui/material/TextField";
+import Tooltip from "@mui/material/Tooltip";
+import Typography from "@mui/material/Typography";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import DeleteIcon from "@mui/icons-material/Delete";
-import { DocumentItem } from "../../../../types/compliance";
 import { useTranslation } from "react-i18next";
+import AttachmentControl from "../../../common/AttachmentControl";
+import { DocumentItem } from "../../../../types/compliance";
 
 interface DocumentValidationRowProps {
   item: DocumentItem;
@@ -22,6 +20,8 @@ interface DocumentValidationRowProps {
   onDelete?: () => void;
   readOnly?: boolean;
   label?: string;
+  projectId?: string;
+  editableLabel?: boolean;
 }
 
 const DocumentValidationRow: React.FC<DocumentValidationRowProps> = ({
@@ -31,22 +31,17 @@ const DocumentValidationRow: React.FC<DocumentValidationRowProps> = ({
   onDelete,
   readOnly = false,
   label,
+  projectId,
+  editableLabel = false,
 }) => {
   const { t } = useTranslation();
-
-  const handleCheckChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onUpdate({ isRequested: e.target.checked });
-  };
-
-  const allowEdit = readOnly ? false : item.isRequested;
-
-  const handleDescChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!allowEdit) return;
-    onUpdate({ description: e.target.value });
-  };
+  const labelValue =
+    label ||
+    item.description ||
+    item.name ||
+    t("compliance.documentDescription", "Descrição do documento");
 
   const handleValidationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!allowEdit) return;
     const newStatus =
       e.target.value === "VALIDATED" ? "VALIDATED" : "NOT_VALIDATED";
     const updates: Partial<DocumentItem> = { status: newStatus };
@@ -56,23 +51,9 @@ const DocumentValidationRow: React.FC<DocumentValidationRowProps> = ({
     onUpdate(updates);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!allowEdit) return;
-    const file = e.target.files?.[0] || null;
-    onFileChange(file);
-    if (file) {
-      onUpdate({
-        originalName: file.name,
-        mimeType: file.type,
-        size: file.size,
-      });
-    }
-  };
-
   const handleValidationDateChange = (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    if (!allowEdit) return;
     const date = e.target.value;
     onUpdate({
       validationDate: date,
@@ -80,112 +61,89 @@ const DocumentValidationRow: React.FC<DocumentValidationRowProps> = ({
     });
   };
 
-  const isDisabled = !allowEdit;
-  const canEditValidationFields = allowEdit;
-
   return (
-    <Paper
-      sx={{
-        p: 2,
-        mb: 2,
-        bgcolor: item.isRequested ? "background.paper" : "#f5f5f5",
-        border: "1px solid #e0e0e0",
-      }}
-    >
-      <Grid container spacing={2} alignItems="center">
-        <Grid item xs={12} sm="auto">
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={item.isRequested}
-                onChange={handleCheckChange}
-                disabled={readOnly}
-              />
-            }
-            label={t("compliance.selectLabel", "Solicitar")}
-          />
-        </Grid>
-
-        <Grid item xs={12} sm={4}>
-          <TextField
-            fullWidth
-            size="small"
-            placeholder={
-              label ||
-              t("compliance.documentDescription", "Descrição do documento")
-            }
-            value={item.description || ""}
-            onChange={handleDescChange}
-            disabled={isDisabled}
-            variant="outlined"
-          />
-        </Grid>
-
-        <Grid item xs={12} sm="auto">
-          <Button
-            variant="outlined"
-            component="label"
-            disabled={isDisabled}
-            startIcon={<AttachFileIcon />}
-            sx={{ textTransform: "none" }}
-          >
-            {t("compliance.attachButton", "Anexar")}
-            <input
-              type="file"
-              hidden
-              accept=".pdf,.jpg,.jpeg,.png,.docx"
-              onChange={handleFileChange}
+    <Paper sx={{ p: 1, mb: 1, bgcolor: "background.paper", border: "1px solid #e0e0e0" }}>
+      <Grid container columnSpacing={1} rowSpacing={0.75} alignItems="center">
+        <Grid item xs={12} md={3}>
+          {editableLabel ? (
+            <TextField
+              fullWidth
+              size="small"
+              value={labelValue}
+              onChange={(e) =>
+                onUpdate({ description: e.target.value, name: e.target.value })
+              }
+              disabled={readOnly}
+              variant="outlined"
             />
-          </Button>
-          {item.originalName && (
-            <Box sx={{ fontSize: "0.75rem", color: "#666", mt: 0.5 }}>
-              {t("compliance.uploadedFile", "Arquivo: {{name}}", {
-                name: item.originalName,
-              })}
-            </Box>
+          ) : (
+            <Typography variant="body2" sx={{ fontWeight: 500, lineHeight: 1.25 }}>
+              {labelValue}
+            </Typography>
           )}
         </Grid>
 
-        <Grid item xs={12} sm="auto">
+        <Grid item xs={12} md={3}>
+          <AttachmentControl
+            projectId={projectId}
+            file={(item as any).file || null}
+            fileName={item.originalName || null}
+            s3Key={(item as any).s3Key || null}
+            disabled={readOnly}
+            buttonLabel={t("compliance.attachButton", "Anexar")}
+            accept=".pdf,.jpg,.jpeg,.png,.docx"
+            compact
+            uploadedBy={(item as any).uploadedBy || null}
+            uploadedAt={
+              (item as any).uploadDate ||
+              (item as any).createdAt ||
+              (item as any).updatedAt ||
+              null
+            }
+            onChange={(file) => {
+              onFileChange(file);
+              if (file) {
+                onUpdate({
+                  originalName: file.name,
+                  mimeType: file.type,
+                  size: file.size,
+                });
+              }
+            }}
+          />
+        </Grid>
+
+        <Grid item xs={12} md={3}>
           <RadioGroup
             row
             value={item.status || ""}
             onChange={handleValidationChange}
-            aria-disabled={isDisabled}
+            aria-disabled={readOnly}
             sx={{
-              pointerEvents: isDisabled ? "none" : "auto",
-              opacity: isDisabled ? 0.6 : 1,
+              pointerEvents: readOnly ? "none" : "auto",
+              opacity: readOnly ? 0.6 : 1,
+              gap: 0.5,
+              "& .MuiFormControlLabel-root": { mr: 0.5 },
+              "& .MuiFormControlLabel-label": { fontSize: "0.8125rem" },
             }}
           >
             <FormControlLabel
               value="VALIDATED"
               control={<Radio size="small" />}
               label={t("compliance.validated", "Validado")}
-              disabled={isDisabled}
+              disabled={readOnly}
             />
             <FormControlLabel
               value="NOT_VALIDATED"
               control={<Radio size="small" />}
               label={t("compliance.notValidated", "Não Validado")}
-              disabled={isDisabled}
+              disabled={readOnly}
             />
           </RadioGroup>
         </Grid>
 
-        <Grid item xs={12} sm={3}>
-          <Tooltip
-            title={
-              canEditValidationFields
-                ? t(
-                    "compliance.validationDateHelper",
-                    "Data em que foi validado",
-                  )
-                : t(
-                    "compliance.validationDateHelperDisabled",
-                    "Selecione o documento e uma opção de validação",
-                  )
-            }
-          >
+        <Grid item xs={12} md={2}>
+          <Tooltip title={t("compliance.validationDateHelper", "Data em que foi validado")}>
             <span>
               <TextField
                 fullWidth
@@ -195,7 +153,7 @@ const DocumentValidationRow: React.FC<DocumentValidationRowProps> = ({
                 value={item.validationDate || ""}
                 onChange={handleValidationDateChange}
                 InputLabelProps={{ shrink: true }}
-                disabled={!canEditValidationFields}
+                disabled={readOnly}
                 variant="outlined"
               />
             </span>
@@ -203,7 +161,7 @@ const DocumentValidationRow: React.FC<DocumentValidationRowProps> = ({
         </Grid>
 
         {onDelete && !readOnly && (
-          <Grid item xs={12} sm="auto">
+          <Grid item xs={12} md={1} sx={{ display: "flex", justifyContent: { xs: "flex-start", md: "flex-end" } }}>
             <IconButton color="error" onClick={onDelete} size="small">
               <DeleteIcon />
             </IconButton>

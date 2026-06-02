@@ -386,12 +386,13 @@ const PatrimonialGoodForm: React.FC<PatrimonialGoodFormProps> = ({
               ].map(({ key, label }) => (
                 <Grid item xs={12} sm={6} key={key}>
                   <Button
-                    variant="outlined"
+                    variant="contained"
+                    color="primary"
                     component="label"
                     fullWidth
                     disabled={readOnly}
                     startIcon={<AttachFileIcon />}
-                    sx={{ textTransform: "none" }}
+                    sx={{ color: "#ffffff", textTransform: "none" }}
                   >
                     {t("compliance.attach", "Anexar")} {label}
                     <input type="file" hidden onChange={handleAttachmentChange(key)} />

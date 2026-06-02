@@ -35,6 +35,7 @@ import {
   BankStatement,
   PatrimonialGood,
 } from "../../../types/compliance";
+import { uploadProjectFile, saveMetadata } from "../../../services/file.service";
 
 type Props = {
   projectId?: string;
@@ -316,9 +317,76 @@ const CapacidadeForm: React.FC<Props> = ({ projectId, projectName }) => {
         id: item.id || generateId(),
       }));
 
+      const uploadDocumentFile = async (
+        item: any,
+        tabName: string,
+        fieldName: string,
+      ) => {
+        if (!(item?.file instanceof File)) return item;
+
+        const uploaded = await uploadProjectFile(
+          projectIdToUse,
+          item.file,
+          projectName,
+          tabName,
+          fieldName,
+        );
+
+        const savedMeta = await saveMetadata(projectIdToUse, {
+          key: uploaded.key,
+          originalName: item.file.name,
+          mimeType: item.file.type,
+          size: item.file.size,
+          uploadedBy: user?.username || user?.email,
+          replaceOriginalName: item.originalName,
+          labelKey: fieldName,
+        });
+
+        return {
+          ...item,
+          s3Key: savedMeta?.s3Key || uploaded.key,
+          originalName: savedMeta?.originalName || item.file.name,
+          mimeType: savedMeta?.mimeType || item.file.type,
+          size: savedMeta?.size || item.file.size,
+          uploadedBy: savedMeta?.uploadedBy || user?.username || user?.email,
+          uploadDate: savedMeta?.createdAt || savedMeta?.updatedAt || new Date().toISOString(),
+          file: undefined,
+        };
+      };
+
+      const uploadedOrganograms = await Promise.all(
+        organogramsWithIds.map((item: any) =>
+          uploadDocumentFile(
+            item,
+            t("compliance.organogram", "ORGANOGRAMA DE CARGOS E FUNÇÕES"),
+            `capacidade.organogram.${item.id || item.name}`,
+          ),
+        ),
+      );
+
+      const uploadedReports = await Promise.all(
+        reportsWithIds.map((item: any) =>
+          uploadDocumentFile(
+            item,
+            t("compliance.reports", "RELATÓRIOS"),
+            `capacidade.report.${item.type}`,
+          ),
+        ),
+      );
+
+      const uploadedBankEntries = await Promise.all(
+        bankEntries.map((entry: any, index) =>
+          uploadDocumentFile(
+            entry,
+            t("compliance.bankStatements", "EXTRATOS BANCÁRIOS"),
+            `capacidade.bank.${entry.id || index}`,
+          ),
+        ),
+      );
+
       const payload: Partial<ComplianceValidation> = {
-        organograms: organogramsWithIds.map(({ file, ...rest }: any) => rest),
-        reports: reportsWithIds.map(({ file, ...rest }: any) => rest),
+        organograms: uploadedOrganograms.map(({ file, ...rest }: any) => rest),
+        reports: uploadedReports.map(({ file, ...rest }: any) => rest),
       };
 
       try {
@@ -344,7 +412,7 @@ const CapacidadeForm: React.FC<Props> = ({ projectId, projectName }) => {
       }
       setDeletedBankEntryIds([]);
 
-      for (const entry of bankEntries) {
+      for (const entry of uploadedBankEntries) {
         if (entry.banco) {
           await saveBankStatement(projectIdToUse, entry as any);
         }
@@ -433,6 +501,8 @@ const CapacidadeForm: React.FC<Props> = ({ projectId, projectName }) => {
               onDelete={() => deleteOrganogramEntry(idx)}
               readOnly={isReadOnly}
               label={item.description}
+              projectId={projectIdToUse}
+              editableLabel
             />
           ))
         )}
@@ -472,6 +542,7 @@ const CapacidadeForm: React.FC<Props> = ({ projectId, projectName }) => {
             onFileChange={(file) => updateBankEntryFile(idx, file)}
             onDelete={() => deleteBankEntry(idx)}
             readOnly={isReadOnly}
+            projectId={projectIdToUse}
           />
         ))}
 
@@ -529,6 +600,7 @@ const CapacidadeForm: React.FC<Props> = ({ projectId, projectName }) => {
                   }}
                   readOnly={isReadOnly}
                   label={label}
+                  projectId={projectIdToUse}
                 />
               </Grid>
             );

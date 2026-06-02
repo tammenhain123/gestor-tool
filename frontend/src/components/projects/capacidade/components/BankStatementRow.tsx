@@ -1,18 +1,16 @@
 import React from "react";
-import Box from "@mui/material/Box";
-import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
-import IconButton from "@mui/material/IconButton";
-import Tooltip from "@mui/material/Tooltip";
 import Grid from "@mui/material/Grid";
+import IconButton from "@mui/material/IconButton";
 import Paper from "@mui/material/Paper";
-import AttachFileIcon from "@mui/icons-material/AttachFile";
-import DeleteIcon from "@mui/icons-material/Delete";
 import Radio from "@mui/material/Radio";
-import FormControlLabel from "@mui/material/FormControlLabel";
 import RadioGroup from "@mui/material/RadioGroup";
-import { BankStatement } from "../../../../types/compliance";
+import TextField from "@mui/material/TextField";
+import Tooltip from "@mui/material/Tooltip";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useTranslation } from "react-i18next";
+import AttachmentControl from "../../../common/AttachmentControl";
+import { BankStatement } from "../../../../types/compliance";
 
 interface BankStatementRowProps {
   item: BankStatement;
@@ -21,6 +19,7 @@ interface BankStatementRowProps {
   onDelete: () => void;
   readOnly?: boolean;
   index: number;
+  projectId?: string;
 }
 
 const maskAccountNumber = (value: string): string => {
@@ -28,9 +27,22 @@ const maskAccountNumber = (value: string): string => {
 };
 
 const maskAgency = (value: string): string => {
-  const cleaned = value.replace(/\D/g, "").slice(0, 5);
-  return cleaned;
+  return value.replace(/\D/g, "").slice(0, 5);
 };
+
+const formatNumeroConta = (raw: string): string => {
+  const digits = raw.replace(/\D/g, "").slice(0, 20);
+  if (digits.length <= 1) return digits;
+  return `${digits.slice(0, -1)}-${digits.slice(-1)}`;
+};
+
+const formatAgencia = (raw: string): string => {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length <= 1) return digits;
+  return `${digits.slice(0, -1)}-${digits.slice(-1)}`;
+};
+
+const stripMask = (masked: string): string => masked.replace(/\D/g, "");
 
 const BankStatementRow: React.FC<BankStatementRowProps> = ({
   item,
@@ -38,6 +50,7 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
   onFileChange,
   onDelete,
   readOnly = false,
+  projectId,
 }) => {
   const { t } = useTranslation();
 
@@ -69,18 +82,6 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
     });
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    onFileChange(file);
-    if (file) {
-      onUpdate({
-        originalName: file.name,
-        mimeType: file.type,
-        size: file.size,
-      });
-    }
-  };
-
   const handleValidationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newStatus = e.target.value as
       | "VALIDADO"
@@ -93,28 +94,10 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
     onUpdate(updates);
   };
 
-  function formatNumeroConta(raw: string): string {
-    const digits = raw.replace(/\D/g, "").slice(0, 20);
-    if (digits.length <= 1) return digits;
-    return `${digits.slice(0, -1)}-${digits.slice(-1)}`;
-  }
-
-  function formatAgencia(raw: string): string {
-    const digits = raw.replace(/\D/g, "");
-    if (digits.length <= 1) return digits;
-    return `${digits.slice(0, -1)}-${digits.slice(-1)}`;
-  }
-
-  function stripMask(masked: string): string {
-    return masked.replace(/\D/g, "");
-  }
-
-  const canEditValidation = true;
-
   return (
     <Paper sx={{ p: 2, mb: 2, border: "1px solid #e0e0e0" }}>
       <Grid container spacing={2} alignItems="center">
-        <Grid item xs={12} sm={2}>
+        <Grid item xs={12} md={2}>
           <TextField
             fullWidth
             size="small"
@@ -125,13 +108,11 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
             variant="outlined"
             required
             error={!item.banco && item.banco === ""}
-            helperText={
-              !item.banco ? t("compliance.required", "Obrigatório") : ""
-            }
+            helperText={!item.banco ? t("compliance.required", "Obrigatório") : ""}
           />
         </Grid>
 
-        <Grid item xs={12} sm={2}>
+        <Grid item xs={12} md={2}>
           <TextField
             fullWidth
             size="small"
@@ -151,7 +132,7 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
           />
         </Grid>
 
-        <Grid item xs={12} sm={2}>
+        <Grid item xs={12} md={2}>
           <TextField
             fullWidth
             size="small"
@@ -171,7 +152,7 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
           />
         </Grid>
 
-        <Grid item xs={12} sm={1}>
+        <Grid item xs={6} md={1}>
           <TextField
             fullWidth
             size="small"
@@ -185,7 +166,7 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
           />
         </Grid>
 
-        <Grid item xs={12} sm={1}>
+        <Grid item xs={6} md={1}>
           <TextField
             fullWidth
             size="small"
@@ -199,31 +180,25 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
           />
         </Grid>
 
-        <Grid item xs={12} sm={2}>
-          <Button
-            variant="outlined"
-            component="label"
+        <Grid item xs={12} md={4}>
+          <AttachmentControl
+            projectId={projectId}
+            file={(item as any).file || null}
+            fileName={item.originalName || null}
+            s3Key={item.s3Key || null}
             disabled={readOnly}
-            startIcon={<AttachFileIcon />}
-            fullWidth
-            sx={{ textTransform: "none" }}
-          >
-            {t("compliance.attachButton", "Anexar")}
-            <input
-              type="file"
-              hidden
-              accept=".pdf"
-              onChange={handleFileChange}
-            />
-          </Button>
-          {item.originalName && (
-            <Box sx={{ fontSize: "0.75rem", color: "#666", mt: 0.5 }}>
-              {item.originalName}
-            </Box>
-          )}
+            buttonLabel={t("compliance.attachButton", "Anexar")}
+            accept=".pdf"
+            uploadedBy={(item as any).uploadedBy || null}
+            uploadedAt={(item as any).createdAt || (item as any).updatedAt || null}
+            onChange={(file) => {
+              onFileChange(file);
+              if (file) onUpdate({ originalName: file.name, mimeType: file.type, size: file.size });
+            }}
+          />
         </Grid>
 
-        <Grid item xs={12} sm={4} sx={{ pl: { sm: 2 } }}>
+        <Grid item xs={12} md={4}>
           <RadioGroup
             row
             value={item.status || "PENDENTE"}
@@ -250,20 +225,8 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
           </RadioGroup>
         </Grid>
 
-        <Grid item xs={12} sm={4}>
-          <Tooltip
-            title={
-              canEditValidation
-                ? t(
-                    "compliance.validationDateHelper",
-                    "Data em que foi validado",
-                  )
-                : t(
-                    "compliance.validationDateHelperDisabled",
-                    "Selecione 'Validado' ou 'Não Validado' para editar",
-                  )
-            }
-          >
+        <Grid item xs={12} md={3}>
+          <Tooltip title={t("compliance.validationDateHelper", "Data em que foi validado")}>
             <span>
               <TextField
                 fullWidth
@@ -273,7 +236,7 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
                 value={item.validationDate || ""}
                 onChange={handleValidationDateChange}
                 InputLabelProps={{ shrink: true }}
-                disabled={!canEditValidation || readOnly}
+                disabled={readOnly}
                 variant="outlined"
               />
             </span>
@@ -281,7 +244,7 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
         </Grid>
 
         {!readOnly && (
-          <Grid item xs={12} sm="auto">
+          <Grid item xs={12} md="auto">
             <IconButton color="error" onClick={onDelete} size="small">
               <DeleteIcon />
             </IconButton>
