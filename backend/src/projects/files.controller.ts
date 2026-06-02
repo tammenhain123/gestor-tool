@@ -29,6 +29,8 @@ export class ProjectFilesController {
       originalName: file.originalname,
       mimeType: file.mimetype,
       size: file.size,
+      labelKey: fieldRaw || undefined,
+      uploadedBy: body?.uploadedBy,
     })
     return { key, id: saved.id }
   }

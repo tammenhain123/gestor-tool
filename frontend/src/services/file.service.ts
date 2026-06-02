@@ -27,10 +27,32 @@ export async function uploadViaBackend(
   if (projectName) form.append("projectName", projectName);
   if (tabName) form.append("tabName", tabName);
   if (fieldName) form.append("fieldName", fieldName);
-  const res = await api.post(`/projects/${projectId}/files`, form, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  const res = await api.post(`/projects/${projectId}/files`, form);
   return res.data;
+}
+
+export async function uploadProjectFile(
+  projectId: string,
+  file: File,
+  projectName?: string,
+  tabName?: string,
+  fieldName?: string,
+) {
+  try {
+    const signed = await presign(projectId, file.name, projectName, tabName, fieldName);
+    const uploadRes = await fetch(signed.url, {
+      method: "PUT",
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+      body: file,
+    });
+
+    if (!uploadRes.ok) throw new Error(`S3 upload failed: ${uploadRes.status}`);
+
+    return { key: signed.key, via: "s3" as const };
+  } catch (err) {
+    const backendRes = await uploadViaBackend(projectId, file, projectName, tabName, fieldName);
+    return { key: backendRes?.key, id: backendRes?.id, via: "backend" as const };
+  }
 }
 
 export async function list(projectId: string) {
@@ -64,4 +86,4 @@ export async function presignGet(projectId: string, key: string) {
   return res.data as { url: string };
 }
 
-export default { presign, saveMetadata, presignGet, list, uploadViaBackend };
+export default { presign, saveMetadata, presignGet, list, uploadViaBackend, uploadProjectFile };

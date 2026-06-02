@@ -8,9 +8,8 @@ import Button from '@mui/material/Button'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import Stack from '@mui/material/Stack'
-import Checkbox from '@mui/material/Checkbox'
-import FilePreview from '../common/FilePreview'
-import { presign, saveMetadata } from '../../services/file.service'
+import AttachmentControl from '../common/AttachmentControl'
+import { saveMetadata, uploadProjectFile } from '../../services/file.service'
 
 type Props = {
   initial?: any
@@ -180,30 +179,11 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
         const uploadOne = async (file: File, docObj: any) => {
           try {
             const fieldName = docObj?.labelKey || docObj?.label || undefined
-            const p = await presign(projectId, file.name, projectName, tabName, fieldName)
-            const uploadRes = await fetch(p.url, { method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file })
-            if (!uploadRes.ok) throw new Error(`S3 upload failed: ${uploadRes.status}`)
-            // save metadata
-            const meta = await saveMetadata(projectId, { key: p.key, originalName: file.name, mimeType: file.type, size: file.size, labelKey: fieldName })
+            const uploaded = await uploadProjectFile(projectId, file, projectName, tabName, fieldName)
+            const meta = await saveMetadata(projectId, { key: uploaded.key, originalName: file.name, mimeType: file.type, size: file.size, labelKey: fieldName })
             return meta
           } catch (err) {
-            // fallback to backend upload
-            try {
-              const fd = new FormData()
-              fd.append('file', file)
-              if (projectName) fd.append('projectName', projectName)
-              fd.append('tabName', tabName)
-              if (docObj?.labelKey || docObj?.label) fd.append('fieldName', (docObj?.labelKey || docObj?.label))
-              const uploadResp = await fetch(`/api/projects/${projectId}/files`, { method: 'POST', body: fd })
-              if (!uploadResp.ok) throw new Error('Backend upload failed')
-              const json = await uploadResp.json()
-              if (json && json.key) {
-                const metaSaved = await saveMetadata(projectId, { key: json.key, originalName: file.name, mimeType: file.type, size: file.size, labelKey: docObj?.labelKey })
-                return metaSaved
-              }
-            } catch (err2) {
-              console.error('Both upload methods failed', err2)
-            }
+            console.error('Upload failed', err)
           }
           return null
         }
@@ -273,17 +253,22 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
             <Stack spacing={1} sx={{ mt: 1 }}>
               {topDocs.map((d, idx) => (
                 <Paper key={idx} variant="outlined" sx={{ p: 1, borderColor: 'divider', borderWidth: 1, borderStyle: 'solid', borderRadius: 1 }}>
-                  <Box sx={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-                    <Box sx={{ minWidth: 360, flexShrink: 0 }}>
-                      <Typography>{d.labelKey ? t(String(d.labelKey)) : (d.label || '')}</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Button disabled={isReadOnly} variant="contained" color="primary" component="label" sx={{ whiteSpace: 'nowrap', minWidth: 96, color: '#ffffff' }}>{t('avaliacao.attach')}
-                        <input type="file" hidden onChange={(e) => { if (!isReadOnly) setTopDoc(idx, { file: e.target.files?.[0] ?? null }) }} />
-                      </Button>
-                      <Box sx={{ ml: 1, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        <Typography variant="body2">{d.file?.name || (d as any).originalName || ''}</Typography>
+                    <Box sx={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                      <Box sx={{ minWidth: 360, flexShrink: 0 }}>
+                        <Typography>{d.labelKey ? t(String(d.labelKey)) : (d.label || '')}</Typography>
                       </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <AttachmentControl
+                        projectId={projectId}
+                        file={d.file}
+                        fileName={d.file?.name || d.originalName || null}
+                        s3Key={(d as any).s3Key || (d as any).key || null}
+                        disabled={isReadOnly}
+                        buttonLabel={t('avaliacao.attach')}
+                        uploadedBy={(d as any).uploadedBy || null}
+                        uploadedAt={(d as any).createdAt || (d as any).updatedAt || null}
+                        onChange={(file) => setTopDoc(idx, { file })}
+                      />
                       <TextField
                         type="date"
                         size="small"
@@ -291,8 +276,6 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
                         onChange={(e) => setTopDoc(idx, { reportDate: e.target.value })}
                         sx={{ maxWidth: 160 }}
                       />
-                      <Checkbox checked={!!(d.file || (d as any).originalName || (d as any).s3Key || (d as any).key)} onClick={(e) => e.preventDefault()} sx={{ '&.Mui-checked': { color: (theme: any) => theme.palette.success.main }, '& .MuiSvgIcon-root': { fontSize: 20 } }} />
-                      <FilePreview projectId={projectId} file={d.file} fileName={d.file?.name || d.originalName || null} s3Key={(d as any).s3Key || (d as any).key || null} />
                     </Box>
                   </Box>
                 </Paper>
@@ -320,12 +303,17 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
                                 <Typography>{d.labelKey ? t(String(d.labelKey)) : (d.label || '')}</Typography>
                               </Box>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <Button disabled={isReadOnly} variant="contained" color="primary" component="label" sx={{ whiteSpace: 'nowrap', minWidth: 96, color: '#ffffff' }}>{t('avaliacao.attach')}
-                                  <input type="file" hidden onChange={(e) => { if (!isReadOnly) setYear(yi, { docs: y.docs.map((dd: any, k: number) => k === di ? { ...dd, file: e.target.files?.[0] ?? null } : dd) }) }} />
-                                </Button>
-                                <Box sx={{ ml: 1, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  <Typography variant="body2">{d.file?.name || d.originalName || ''}</Typography>
-                                </Box>
+                                <AttachmentControl
+                                  projectId={projectId}
+                                  file={d.file}
+                                  fileName={d.file?.name || d.originalName || null}
+                                  s3Key={d.s3Key || d.key || null}
+                                  disabled={isReadOnly}
+                                  buttonLabel={t('avaliacao.attach')}
+                                  uploadedBy={d.uploadedBy || null}
+                                  uploadedAt={d.createdAt || d.updatedAt || null}
+                                  onChange={(file) => setYear(yi, { docs: y.docs.map((dd: any, k: number) => k === di ? { ...dd, file } : dd) })}
+                                />
                                 <TextField
                                   type="date"
                                   size="small"
@@ -333,8 +321,6 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
                                   onChange={(e) => setYear(yi, { docs: y.docs.map((dd: any, k: number) => k === di ? { ...dd, reportDate: e.target.value } : dd) })}
                                   sx={{ maxWidth: 160 }}
                                 />
-                                <Checkbox checked={!!(d.file || d.originalName || d.s3Key || d.key)} onClick={(e) => e.preventDefault()} sx={{ '&.Mui-checked': { color: (theme: any) => theme.palette.success.main }, '& .MuiSvgIcon-root': { fontSize: 20 } }} />
-                                <FilePreview projectId={projectId} file={d.file} fileName={d.file?.name || d.originalName || null} s3Key={d.s3Key || d.key || null} />
                               </Box>
                             </Box>
                           </Paper>

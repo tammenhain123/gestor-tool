@@ -101,38 +101,18 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
         // ensure server-side record exists
         await saveStrategy(projectIdToUse, merged)
 
-        const { presign, saveMetadata } = await import('../../services/file.service')
+        const { uploadProjectFile, saveMetadata } = await import('../../services/file.service')
         const tabName = 'Strategy & Procedure'
 
         const uploadOne = async (file: File, docObj: any, label?: string) => {
           try {
             const fieldName = label || docObj?.labelKey || docObj?.label || undefined
-            const p = await presign(projectIdToUse, file.name, projectName, tabName, fieldName)
-            const uploadRes = await fetch(p.url, { method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file })
-            if (!uploadRes.ok) throw new Error(`S3 upload failed: ${uploadRes.status}`)
-            // include replaceOriginalName hint if an existing doc entry has an originalName
+            const uploaded = await uploadProjectFile(projectIdToUse, file, projectName, tabName, fieldName)
             const replaceHint = docObj?.originalName || docObj?.name || undefined
-            const metaSaved = await saveMetadata(projectIdToUse, { key: p.key, originalName: file.name, mimeType: file.type, size: file.size, replaceOriginalName: replaceHint, labelKey: fieldName })
+            const metaSaved = await saveMetadata(projectIdToUse, { key: uploaded.key, originalName: file.name, mimeType: file.type, size: file.size, replaceOriginalName: replaceHint, labelKey: fieldName })
             return metaSaved
           } catch (err) {
-            // fallback to backend upload
-            try {
-              const fd = new FormData()
-              fd.append('file', file)
-              if (projectName) fd.append('projectName', projectName)
-              fd.append('tabName', tabName)
-              if (docObj?.labelKey || docObj?.label) fd.append('fieldName', (docObj?.labelKey || docObj?.label))
-                const uploadResp = await fetch(`/api/projects/${projectIdToUse}/files`, { method: 'POST', body: fd })
-              if (!uploadResp.ok) throw new Error('Backend upload failed')
-              const json = await uploadResp.json()
-              if (json && json.key) {
-                const replaceHint = docObj?.originalName || docObj?.name || undefined
-                const metaSaved = await saveMetadata(projectIdToUse, { key: json.key, originalName: file.name, mimeType: file.type, size: file.size, replaceOriginalName: replaceHint, labelKey: docObj?.labelKey })
-                return metaSaved
-              }
-            } catch (err2) {
-              console.error('Both upload methods failed', err2)
-            }
+            console.error('Upload failed', err)
           }
           return null
         }
@@ -370,7 +350,7 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
                                 <Typography>{t(String(labelKey))}</Typography>
                               </Grid>
                               <Grid item xs={12} md={4} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Button variant="outlined" component="label">{t('estrategia.attach')}
+                                <Button disabled={isReadOnly} variant="contained" color="primary" component="label" sx={{ color: '#ffffff', minWidth: 96, textTransform: 'none', whiteSpace: 'nowrap' }}>{t('estrategia.attach')}
                                   <input type="file" hidden onChange={(e) => setBem(i, { arquivos: { ...(b.arquivos || {}), [fileField]: e.target.files?.[0] ?? null } })} />
                                 </Button>
                                 <Box sx={{ ml: 1, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
