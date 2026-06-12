@@ -22,6 +22,7 @@ interface DocumentValidationRowProps {
   label?: string;
   projectId?: string;
   editableLabel?: boolean;
+  historyLabelKey?: string | null;
 }
 
 const DocumentValidationRow: React.FC<DocumentValidationRowProps> = ({
@@ -33,6 +34,7 @@ const DocumentValidationRow: React.FC<DocumentValidationRowProps> = ({
   label,
   projectId,
   editableLabel = false,
+  historyLabelKey,
 }) => {
   const { t } = useTranslation();
   const labelValue =
@@ -89,6 +91,7 @@ const DocumentValidationRow: React.FC<DocumentValidationRowProps> = ({
             file={(item as any).file || null}
             fileName={item.originalName || null}
             s3Key={(item as any).s3Key || null}
+            historyLabelKey={historyLabelKey}
             disabled={readOnly}
             buttonLabel={t("compliance.attachButton", "Anexar")}
             accept=".pdf,.jpg,.jpeg,.png,.docx"

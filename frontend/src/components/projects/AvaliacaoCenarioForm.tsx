@@ -157,10 +157,6 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
     void applyInitialDocs()
   }, [initial, projectId])
 
-    React.useEffect(() => {
-      console.log('AvaliacaoCenarioForm mounted', { projectId, projectName, initial, topDocs, years })
-    }, [])
-
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault()
     const payload = { topDocs, years }
@@ -181,7 +177,7 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
             const fieldName = docObj?.labelKey || docObj?.label || undefined
             const uploaded = await uploadProjectFile(projectId, file, projectName, tabName, fieldName)
             const meta = await saveMetadata(projectId, { key: uploaded.key, originalName: file.name, mimeType: file.type, size: file.size, labelKey: fieldName })
-            return meta
+            return { meta, labelKey: fieldName, originalName: file.name }
           } catch (err) {
             console.error('Upload failed', err)
           }
@@ -202,30 +198,45 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
           }
         }
 
-        const savedMetas = uploads.length ? (await Promise.all(uploads)).filter(Boolean) : []
+        const savedUploads = uploads.length ? (await Promise.all(uploads)).filter(Boolean) : []
 
         // Merge saved metadata into final payload structure
-        const metaByOriginal = new Map(savedMetas.map((m: any) => [m.originalName, m]))
+        const metaByLabel = new Map(savedUploads.map((u: any) => [u.labelKey, u.meta]))
+        const metaByOriginal = new Map(savedUploads.map((u: any) => [u.originalName, u.meta]))
 
-        const finalPayload = {
-          topDocs: (payload.topDocs || []).map((d: any) => ({
+        const mergeUploadedDoc = (d: any) => {
+          const meta = d.file
+            ? (metaByLabel.get(d.labelKey) || metaByOriginal.get(d.file.name))
+            : null
+          const previousKeys = Array.isArray(d.historyS3Keys) ? d.historyS3Keys.filter(Boolean) : []
+          const currentKey = d.s3Key || d.key
+          const historyS3Keys = meta && currentKey
+            ? Array.from(new Set([...previousKeys, currentKey]))
+            : previousKeys
+
+          return {
             ...d,
             file: undefined,
             reportDate: d.reportDate || d.date || undefined,
-            s3Key: d.s3Key || (d.file ? (metaByOriginal.get(d.file.name)?.s3Key || metaByOriginal.get(d.file.name)?.key) : undefined),
-            originalName: d.originalName || d.name || (d.file ? (metaByOriginal.get(d.file.name)?.originalName) : undefined),
-          })),
+            s3Key: meta ? (meta.s3Key || meta.key) : d.s3Key,
+            originalName: meta ? meta.originalName : (d.originalName || d.name),
+            historyS3Keys,
+            uploadedBy: meta?.uploadedBy || d.uploadedBy,
+            createdAt: meta?.createdAt || d.createdAt,
+            updatedAt: meta?.updatedAt || d.updatedAt,
+          }
+        }
+
+        const finalPayload = {
+          topDocs: (payload.topDocs || []).map(mergeUploadedDoc),
           years: (payload.years || []).map((y: any) => ({
             year: y.year,
-            docs: (y.docs || []).map((d: any) => ({
-              ...d,
-              file: undefined,
-              reportDate: d.reportDate || d.date || undefined,
-              s3Key: d.s3Key || (d.file ? (metaByOriginal.get(d.file.name)?.s3Key || metaByOriginal.get(d.file.name)?.key) : undefined),
-              originalName: d.originalName || d.name || (d.file ? (metaByOriginal.get(d.file.name)?.originalName) : undefined),
-            }))
+            docs: (y.docs || []).map(mergeUploadedDoc)
           }))
         }
+
+        setTopDocs(finalPayload.topDocs)
+        setYears(finalPayload.years)
 
         if (onSave) await onSave(finalPayload)
         return
@@ -263,6 +274,8 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
                         file={d.file}
                         fileName={d.file?.name || d.originalName || null}
                         s3Key={(d as any).s3Key || (d as any).key || null}
+                        historyLabelKey={(d as any).labelKey || null}
+                        historyFallbackKeys={(d as any).historyS3Keys || []}
                         disabled={isReadOnly}
                         buttonLabel={t('avaliacao.attach')}
                         uploadedBy={(d as any).uploadedBy || null}
@@ -308,6 +321,8 @@ const AvaliacaoCenarioForm: React.FC<Props> = ({ initial, onSave, projectId, pro
                                   file={d.file}
                                   fileName={d.file?.name || d.originalName || null}
                                   s3Key={d.s3Key || d.key || null}
+                                  historyLabelKey={d.labelKey || null}
+                                  historyFallbackKeys={d.historyS3Keys || []}
                                   disabled={isReadOnly}
                                   buttonLabel={t('avaliacao.attach')}
                                   uploadedBy={d.uploadedBy || null}

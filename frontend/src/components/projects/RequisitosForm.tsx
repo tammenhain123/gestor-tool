@@ -129,6 +129,14 @@ const DEFAULT_CERTIDOES: Omit<Certidao, "id">[] = [
 let certidaoIdCounter = DEFAULT_CERTIDOES.length + 1;
 let obrigacaoIdCounter = 1;
 
+const normalizeFileName = (name?: string | null) =>
+  String(name || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[_\s-]+/g, "")
+    .trim();
+
 const buildDefaultCertidoes = (initial?: any[]): Certidao[] => {
   if (Array.isArray(initial) && initial.length > 0)
     return initial.map((c, i) => ({ id: i + 1, ...c }));
@@ -185,11 +193,14 @@ const RequisitosForm: React.FC<Props> = ({
 
         const files = Array.isArray(filesResp) ? filesResp : [];
         const byOriginalName = new Map<string, any>();
+        const byNormalizedName = new Map<string, any>();
         const byKey = new Map<string, any>();
         const byLabelKey = new Map<string, any>();
         files.forEach((file: any) => {
-          if (file?.originalName)
+          if (file?.originalName) {
             byOriginalName.set(String(file.originalName), file);
+            byNormalizedName.set(normalizeFileName(file.originalName), file);
+          }
           if (file?.s3Key) byKey.set(String(file.s3Key), file);
           if (file?.labelKey) byLabelKey.set(String(file.labelKey), file);
         });
@@ -197,10 +208,13 @@ const RequisitosForm: React.FC<Props> = ({
         const incomingCertidoes = buildDefaultCertidoes(
           requirementsResp.data?.certidoes,
         ).map((certidao) => {
+          const labelKey = `requisitos.certidao.${certidao.id}`;
           const match =
+            byLabelKey.get(labelKey) ||
             (certidao.anexoS3Key && byKey.get(String(certidao.anexoS3Key))) ||
             (certidao.anexoName &&
-              byOriginalName.get(String(certidao.anexoName)));
+              (byOriginalName.get(String(certidao.anexoName)) ||
+                byNormalizedName.get(normalizeFileName(certidao.anexoName))));
 
           return {
             ...certidao,
@@ -227,26 +241,31 @@ const RequisitosForm: React.FC<Props> = ({
 
             const arquivoMatch =
               (o.arquivoS3Key && byKey.get(String(o.arquivoS3Key))) ||
-              (o.arquivoName && byOriginalName.get(String(o.arquivoName))) ||
+              (o.arquivoName &&
+                (byOriginalName.get(String(o.arquivoName)) ||
+                  byNormalizedName.get(normalizeFileName(o.arquivoName)))) ||
               byLabelKey.get(arquivoLabel);
 
             const arquivoPdfMatch =
               (o.arquivoPdfS3Key && byKey.get(String(o.arquivoPdfS3Key))) ||
               (o.arquivoPdfName &&
-                byOriginalName.get(String(o.arquivoPdfName))) ||
+                (byOriginalName.get(String(o.arquivoPdfName)) ||
+                  byNormalizedName.get(normalizeFileName(o.arquivoPdfName)))) ||
               byLabelKey.get(arquivoPdfLabel);
 
             const comprovanteMatch =
               (o.comprovanteS3Key && byKey.get(String(o.comprovanteS3Key))) ||
               (o.comprovanteName &&
-                byOriginalName.get(String(o.comprovanteName))) ||
+                (byOriginalName.get(String(o.comprovanteName)) ||
+                  byNormalizedName.get(normalizeFileName(o.comprovanteName)))) ||
               byLabelKey.get(comprovanteLabel);
 
             const comprovantePdfMatch =
               (o.comprovantePdfS3Key &&
                 byKey.get(String(o.comprovantePdfS3Key))) ||
               (o.comprovantePdfName &&
-                byOriginalName.get(String(o.comprovantePdfName))) ||
+                (byOriginalName.get(String(o.comprovantePdfName)) ||
+                  byNormalizedName.get(normalizeFileName(o.comprovantePdfName)))) ||
               byLabelKey.get(comprovantePdfLabel);
 
             return {
@@ -400,9 +419,7 @@ const RequisitosForm: React.FC<Props> = ({
           : c,
       );
 
-      updateCertidao(id, "anexoS3Key", presigned.key);
-      updateCertidao(id, "uploadedBy", savedMeta?.uploadedBy);
-      updateCertidao(id, "createdAt", savedMeta?.createdAt || savedMeta?.updatedAt);
+      setCertidoes(nextCertidoes);
 
       try {
         await api.put(`/projects/${projectId}/requisitos`, {
@@ -461,9 +478,7 @@ const RequisitosForm: React.FC<Props> = ({
             : c,
         );
 
-        updateCertidao(id, "anexoS3Key", key);
-        updateCertidao(id, "uploadedBy", savedMeta?.uploadedBy);
-        updateCertidao(id, "createdAt", savedMeta?.createdAt || savedMeta?.updatedAt);
+        setCertidoes(nextCertidoes);
 
         try {
           await api.put(`/projects/${projectId}/requisitos`, {
@@ -584,15 +599,27 @@ const RequisitosForm: React.FC<Props> = ({
         console.error("Error saving obrigacao metadata:", metadataErr);
       }
 
-      updateObrigacao(id, s3KeyField as any, presigned.key);
-      updateObrigacao(id, `${field}UploadedBy` as any, savedMeta?.uploadedBy);
-      updateObrigacao(id, `${field}CreatedAt` as any, savedMeta?.createdAt || savedMeta?.updatedAt);
+      const nextObrigacoes = obrigacoes.map((o) =>
+        o.id === id
+          ? {
+              ...o,
+              [field]: file,
+              [nameField]: file.name,
+              [s3KeyField]: presigned.key,
+              [`${field}UploadedBy`]: savedMeta?.uploadedBy || (o as any)[`${field}UploadedBy`],
+              [`${field}CreatedAt`]:
+                savedMeta?.createdAt || savedMeta?.updatedAt || (o as any)[`${field}CreatedAt`],
+            }
+          : o,
+      );
+
+      setObrigacoes(nextObrigacoes);
 
       // persist requisitos
       try {
         await api.put(`/projects/${projectId}/requisitos`, {
           certidoes,
-          obrigacoes: obrigacoes.map((o) => (o.id === id ? { ...o } : o)),
+          obrigacoes: nextObrigacoes,
         });
       } catch (saveErr) {
         console.error("Error persisting obrigacao file metadata:", saveErr);
@@ -634,14 +661,26 @@ const RequisitosForm: React.FC<Props> = ({
           );
         }
 
-        updateObrigacao(id, s3KeyField as any, key);
-        updateObrigacao(id, `${field}UploadedBy` as any, savedMeta?.uploadedBy);
-        updateObrigacao(id, `${field}CreatedAt` as any, savedMeta?.createdAt || savedMeta?.updatedAt);
+        const nextObrigacoes = obrigacoes.map((o) =>
+          o.id === id
+            ? {
+                ...o,
+                [field]: file,
+                [nameField]: file.name,
+                [s3KeyField]: key,
+                [`${field}UploadedBy`]: savedMeta?.uploadedBy || (o as any)[`${field}UploadedBy`],
+                [`${field}CreatedAt`]:
+                  savedMeta?.createdAt || savedMeta?.updatedAt || (o as any)[`${field}CreatedAt`],
+              }
+            : o,
+        );
+
+        setObrigacoes(nextObrigacoes);
 
         try {
           await api.put(`/projects/${projectId}/requisitos`, {
             certidoes,
-            obrigacoes: obrigacoes.map((o) => (o.id === id ? { ...o } : o)),
+            obrigacoes: nextObrigacoes,
           });
           setToast({
             type: "success",
@@ -790,6 +829,7 @@ const RequisitosForm: React.FC<Props> = ({
                       file={c.anexo}
                       fileName={c.anexoName}
                       s3Key={c.anexoS3Key}
+                      historyLabelKey={`requisitos.certidao.${c.id}`}
                       onChange={(file) => handleCertidaoFileChange(c.id, file)}
                       disabled={readOnly}
                       uploadedBy={c.uploadedBy}
@@ -914,6 +954,7 @@ const RequisitosForm: React.FC<Props> = ({
                             file={o.arquivo}
                             fileName={o.arquivoName}
                             s3Key={o.arquivoS3Key}
+                            historyLabelKey={`requisitos.obrigacao.${o.id}.arquivo`}
                             onChange={(f) =>
                               handleObrigacaoFileChange(o.id, "arquivo", f)
                             }
@@ -928,6 +969,7 @@ const RequisitosForm: React.FC<Props> = ({
                             file={o.comprovante}
                             fileName={o.comprovanteName}
                             s3Key={o.comprovanteS3Key}
+                            historyLabelKey={`requisitos.obrigacao.${o.id}.comprovante`}
                             onChange={(f) =>
                               handleObrigacaoFileChange(o.id, "comprovante", f)
                             }
@@ -946,6 +988,7 @@ const RequisitosForm: React.FC<Props> = ({
                             file={o.arquivoPdf}
                             fileName={o.arquivoPdfName}
                             s3Key={o.arquivoPdfS3Key}
+                            historyLabelKey={`requisitos.obrigacao.${o.id}.arquivoPdf`}
                             onChange={(f) =>
                               handleObrigacaoFileChange(o.id, "arquivoPdf", f)
                             }
@@ -963,6 +1006,7 @@ const RequisitosForm: React.FC<Props> = ({
                             file={o.comprovantePdf}
                             fileName={o.comprovantePdfName}
                             s3Key={o.comprovantePdfS3Key}
+                            historyLabelKey={`requisitos.obrigacao.${o.id}.comprovantePdf`}
                             onChange={(f) =>
                               handleObrigacaoFileChange(
                                 o.id,
@@ -1013,7 +1057,7 @@ const RequisitosForm: React.FC<Props> = ({
       </Paper>
 
       {/* ── Salvar ── */}
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
+      <Box sx={{ display: "flex", justifyContent: "flex-start", mt: 1 }}>
         <Button type="submit" variant="contained" disabled={readOnly || saving}>
           {saving ? (
             <>

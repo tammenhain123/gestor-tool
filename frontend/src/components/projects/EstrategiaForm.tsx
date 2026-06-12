@@ -8,12 +8,8 @@ import Button from '@mui/material/Button'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import Stack from '@mui/material/Stack'
-import IconButton from '@mui/material/IconButton'
-import Tooltip from '@mui/material/Tooltip'
-import InfoIcon from '@mui/icons-material/Info'
 import AddIcon from '@mui/icons-material/Add'
-import Checkbox from '@mui/material/Checkbox'
-import FilePreview from '../common/FilePreview'
+import AttachmentControl from '../common/AttachmentControl'
 
 type Props = {
   initial?: any
@@ -46,7 +42,7 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
 
   const [bens, setBens] = useState(() => (Array.isArray(initial?.bens) && initial.bens.length > 0 ? initial.bens : [{ descricao: '', apresentacao: '', matricula: '', valorAtual: '', ocupante: { nome: '', cpfCnpj: '', telefone: '' }, arquivos: { matriculaFile: null as File | null, bciFile: null as File | null, iptuFile: null as File | null } }]))
 
-  const setDoc = (index: number, patch: Partial<{ file: File | null; validado: 'sim' | 'nao' }>) => {
+  const setDoc = (index: number, patch: Partial<{ file: File | null; emissaoDate: string | null; validado: 'sim' | 'nao' }>) => {
     setDocs((prev) => {
       const next = prev.slice()
       next[index] = { ...next[index], ...patch }
@@ -188,10 +184,6 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
   }
 
   React.useEffect(() => {
-    console.log('EstrategiaForm mounted', { projectId: projectIdToUse, projectName, initial })
-  }, [])
-
-  React.useEffect(() => {
     if (!initial) return
     try {
       const applyInitialDocs = async () => {
@@ -264,12 +256,18 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
                       <Typography>{d.labelKey ? t(String(d.labelKey)) : (d.label || '')}</Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Button disabled={isReadOnly} variant="contained" color="primary" component="label" sx={{ whiteSpace: 'nowrap', minWidth: 96, color: '#ffffff' }}>{t('estrategia.attach')}
-                        <input type="file" hidden onChange={(e) => { if (!isReadOnly) setDoc(idx, { file: e.target.files?.[0] ?? null }) }} />
-                      </Button>
-                      <Box sx={{ ml: 1, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        <Typography variant="body2">{d.file?.name || (d as any).originalName || ((d as any).s3Key ? String((d as any).s3Key).split('/').pop() : '')}</Typography>
-                      </Box>
+                      <AttachmentControl
+                        projectId={projectIdToUse || projectId}
+                        file={d.file}
+                        fileName={d.file?.name || (d as any).originalName || null}
+                        s3Key={(d as any).s3Key || (d as any).key || null}
+                        historyLabelKey={(d as any).labelKey || null}
+                        disabled={isReadOnly}
+                        buttonLabel={t('estrategia.attach')}
+                        uploadedBy={(d as any).uploadedBy || ((d as any).meta && (d as any).meta.uploadedBy) || null}
+                        uploadedAt={(d as any).createdAt || (d as any).updatedAt || null}
+                        onChange={(file) => setDoc(idx, { file })}
+                      />
                       <TextField
                         type="date"
                         size="small"
@@ -277,26 +275,6 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
                         onChange={(e) => setDoc(idx, { emissaoDate: e.target.value })}
                         sx={{ maxWidth: 160 }}
                       />
-                      <Checkbox
-                        checked={!!(d.file || d.originalName || (d as any).s3Key || (d as any).key)}
-                        onClick={(e) => e.preventDefault()}
-                        sx={{
-                          '&.Mui-checked': { color: (theme: any) => theme.palette.success.main },
-                          '& .MuiSvgIcon-root': { fontSize: 20 },
-                        }}
-                      />
-                      <FilePreview projectId={projectIdToUse || projectId} file={d.file} fileName={d.file?.name || d.originalName || null} s3Key={(d as any).s3Key || (d as any).key || null} />
-                      <Tooltip title={(() => {
-                        try {
-                          const uploader = (d.uploadedBy || (d.meta && typeof d.meta === 'object' ? d.meta.uploadedBy : undefined) || 'Desconhecido')
-                          const date = d.createdAt ? new Date(d.createdAt).toLocaleString() : ''
-                          return `${uploader}${date ? ' — ' + date : ''}`
-                        } catch (e) { return t('file.info') }
-                      })()}>
-                        <IconButton aria-label="Informações" sx={{ color: 'primary.main', p: 0.5, '& .MuiSvgIcon-root': { fontSize: 20 } }}>
-                          <InfoIcon />
-                        </IconButton>
-                      </Tooltip>
                     </Box>
                   </Box>
                 </Paper>
@@ -340,6 +318,7 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
                       {['matricula','bci','iptu'].map((key) => {
                         const fileField = `${key}File`
                         const labelKey = `capacidade.bem.${key}`
+                        const historyLabelKey = `estrategia.bem.${i}.${key}`
                         const originalNameKey = `${key}OriginalName`
                         const fileObj = (b.arquivos && (b.arquivos as any)[fileField]) || null
                         const existingName = fileObj?.name || (b as any)[originalNameKey] || ''
@@ -350,32 +329,18 @@ const EstrategiaForm: React.FC<Props> = ({ initial, onSave, projectId, projectNa
                                 <Typography>{t(String(labelKey))}</Typography>
                               </Grid>
                               <Grid item xs={12} md={4} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Button disabled={isReadOnly} variant="contained" color="primary" component="label" sx={{ color: '#ffffff', minWidth: 96, textTransform: 'none', whiteSpace: 'nowrap' }}>{t('estrategia.attach')}
-                                  <input type="file" hidden onChange={(e) => setBem(i, { arquivos: { ...(b.arquivos || {}), [fileField]: e.target.files?.[0] ?? null } })} />
-                                </Button>
-                                <Box sx={{ ml: 1, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  <Typography variant="body2">{existingName}</Typography>
-                                </Box>
-                                <Checkbox
-                                  checked={!!(fileObj || (b as any)[originalNameKey])}
-                                  onClick={(e) => e.preventDefault()}
-                                  sx={{
-                                    '&.Mui-checked': { color: (theme: any) => theme.palette.success.main },
-                                    '& .MuiSvgIcon-root': { fontSize: 20 },
-                                  }}
+                                <AttachmentControl
+                                  projectId={projectIdToUse || projectId}
+                                  file={fileObj}
+                                  fileName={existingName || null}
+                                  s3Key={(b as any)[`${key}S3Key`] || null}
+                                  historyLabelKey={historyLabelKey}
+                                  disabled={isReadOnly}
+                                  buttonLabel={t('estrategia.attach')}
+                                  uploadedBy={(b as any)[`${key}UploadedBy`] || null}
+                                  uploadedAt={(b as any)[`${key}CreatedAt`] || (b as any)[`${key}UpdatedAt`] || null}
+                                  onChange={(file) => setBem(i, { arquivos: { ...(b.arquivos || {}), [fileField]: file } })}
                                 />
-                                <FilePreview projectId={projectIdToUse || projectId} file={fileObj} fileName={fileObj?.name || (b as any)[originalNameKey] || null} s3Key={(b as any)[`${key}S3Key`] || null} />
-                                <Tooltip title={(() => {
-                                  try {
-                                    const uploader = ( (b as any)[`${key}UploadedBy`] || 'Desconhecido')
-                                    const date = ( (b as any)[`${key}CreatedAt`] ? new Date((b as any)[`${key}CreatedAt`]).toLocaleString() : '' )
-                                    return `${uploader}${date ? ' — ' + date : ''}`
-                                  } catch (e) { return t('file.info') }
-                                })()}>
-                                  <IconButton aria-label="Informações" sx={{ color: 'primary.main', p: 0.5, '& .MuiSvgIcon-root': { fontSize: 20 } }}>
-                                    <InfoIcon />
-                                  </IconButton>
-                                </Tooltip>
                               </Grid>
                             </Grid>
                           </Paper>

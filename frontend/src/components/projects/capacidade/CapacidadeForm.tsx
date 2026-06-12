@@ -502,6 +502,7 @@ const CapacidadeForm: React.FC<Props> = ({ projectId, projectName }) => {
               readOnly={isReadOnly}
               label={item.description}
               projectId={projectIdToUse}
+              historyLabelKey={`capacidade.organogram.${item.id || item.name}`}
               editableLabel
             />
           ))
@@ -543,6 +544,7 @@ const CapacidadeForm: React.FC<Props> = ({ projectId, projectName }) => {
             onDelete={() => deleteBankEntry(idx)}
             readOnly={isReadOnly}
             projectId={projectIdToUse}
+            historyLabelKey={`capacidade.bank.${item.id || idx}`}
           />
         ))}
 
@@ -601,6 +603,7 @@ const CapacidadeForm: React.FC<Props> = ({ projectId, projectName }) => {
                   readOnly={isReadOnly}
                   label={label}
                   projectId={projectIdToUse}
+                  historyLabelKey={`capacidade.report.${key}`}
                 />
               </Grid>
             );
@@ -677,7 +680,7 @@ const CapacidadeForm: React.FC<Props> = ({ projectId, projectName }) => {
         </Button>
       </Paper>
 
-      <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end", mt: 3 }}>
+      <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-start", mt: 3 }}>
         <Button
           variant="contained"
           onClick={handleSaveAll}
@@ -698,6 +701,8 @@ const CapacidadeForm: React.FC<Props> = ({ projectId, projectName }) => {
         }}
         onSave={savePatrimonialGood}
         readOnly={isReadOnly}
+        projectId={projectIdToUse}
+        projectName={projectName}
       />
     </Box>
   );

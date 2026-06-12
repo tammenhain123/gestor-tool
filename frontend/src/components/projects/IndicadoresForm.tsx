@@ -12,6 +12,7 @@ import Alert from "@mui/material/Alert";
 import DocumentValidationRow from "./capacidade/components/DocumentValidationRow";
 import { DocumentItem } from "../../types/compliance";
 import { api } from "../../services/api";
+import { saveMetadata, uploadProjectFile } from "../../services/file.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -136,6 +137,7 @@ const IndicadoresForm: React.FC<Props> = ({
       ...prev,
       [field]: {
         ...(prev[field] as DocumentItem),
+        file,
         originalName: file?.name,
         mimeType: file?.type,
         size: file?.size,
@@ -168,6 +170,7 @@ const IndicadoresForm: React.FC<Props> = ({
         i === index
           ? {
               ...r,
+              file,
               originalName: file?.name,
               mimeType: file?.type,
               size: file?.size,
@@ -198,6 +201,58 @@ const IndicadoresForm: React.FC<Props> = ({
       };
     });
 
+  const uploadDocument = async (
+    item: DocumentItem,
+    labelKey: string,
+    tabName: string,
+  ): Promise<DocumentItem> => {
+    if (!(item.file instanceof File)) return item;
+
+    const uploaded = await uploadProjectFile(
+      projectId,
+      item.file,
+      projectName,
+      tabName,
+      labelKey,
+    );
+
+    const savedMeta = await saveMetadata(projectId, {
+      key: uploaded.key,
+      originalName: item.file.name,
+      mimeType: item.file.type,
+      size: item.file.size,
+      replaceOriginalName: item.originalName,
+      labelKey,
+    });
+
+    return {
+      ...item,
+      s3Key: savedMeta?.s3Key || uploaded.key,
+      originalName: savedMeta?.originalName || item.file.name,
+      mimeType: savedMeta?.mimeType || item.file.type,
+      size: savedMeta?.size || item.file.size,
+      uploadedBy: savedMeta?.uploadedBy || item.uploadedBy,
+      uploadDate:
+        savedMeta?.createdAt ||
+        savedMeta?.updatedAt ||
+        new Date().toISOString(),
+      file: null,
+    };
+  };
+
+  const uploadRows = async (
+    field: keyof IndicadoresData,
+    tabName: string,
+  ): Promise<HistoricoSection> => {
+    const section = data[field] as HistoricoSection;
+    const rows = await Promise.all(
+      section.rows.map((row, idx) =>
+        uploadDocument(row, `indicadores.${field}.${row.id || idx}`, tabName),
+      ),
+    );
+    return { ...section, rows };
+  };
+
   // ── Submit ──────────────────────────────────────────────────────────────────
 
   const submit = async (e?: React.FormEvent) => {
@@ -208,10 +263,52 @@ const IndicadoresForm: React.FC<Props> = ({
       setSaving(true);
       setError(null);
 
-      await api.put(`/projects/${projectId}/indicators`, data);
+      const payload: IndicadoresData = {
+        ...data,
+        vendasPorCliente: await uploadDocument(
+          data.vendasPorCliente,
+          "indicadores.vendasPorCliente",
+          "Indicadores - Relatório de Vendas por Cliente",
+        ),
+        historicoProdução: await uploadRows(
+          "historicoProdução",
+          "Indicadores - Histórico de Produção",
+        ),
+        historicoPagamentos: await uploadRows(
+          "historicoPagamentos",
+          "Indicadores - Histórico de Pagamentos",
+        ),
+        historicoVendas: await uploadRows(
+          "historicoVendas",
+          "Indicadores - Histórico de Vendas",
+        ),
+        paretoVendas: await uploadDocument(
+          data.paretoVendas,
+          "indicadores.paretoVendas",
+          "Indicadores - Pareto de Vendas",
+        ),
+        paretoFornecedores: await uploadDocument(
+          data.paretoFornecedores,
+          "indicadores.paretoFornecedores",
+          "Indicadores - Pareto de Fornecedores",
+        ),
+        relatorioCusto: await uploadDocument(
+          data.relatorioCusto,
+          "indicadores.relatorioCusto",
+          "Indicadores - Relatório de Custo",
+        ),
+        relatorioCentroCusto: await uploadDocument(
+          data.relatorioCentroCusto,
+          "indicadores.relatorioCentroCusto",
+          "Indicadores - Relatório de Centro de Custo",
+        ),
+      };
+
+      await api.put(`/projects/${projectId}/indicators`, payload);
+      setData(payload);
 
       if (onSave) {
-        await onSave(data);
+        await onSave(payload);
       }
     } catch (err: any) {
       console.error("Error saving indicadores:", err);
@@ -259,6 +356,8 @@ const IndicadoresForm: React.FC<Props> = ({
           onFileChange={(f) => updateSimpleFile("vendasPorCliente", f)}
           readOnly={readOnly}
           label="Relatório de Vendas por Cliente"
+          projectId={projectId}
+          historyLabelKey="indicadores.vendasPorCliente"
         />
       </Paper>
 
@@ -283,6 +382,8 @@ const IndicadoresForm: React.FC<Props> = ({
             }
             readOnly={readOnly}
             label={`Relatório ${idx + 1}`}
+            projectId={projectId}
+            historyLabelKey={`indicadores.historicoProducao.${row.id || idx}`}
           />
         ))}
         <Button
@@ -316,6 +417,8 @@ const IndicadoresForm: React.FC<Props> = ({
             }
             readOnly={readOnly}
             label={`Relatório ${idx + 1}`}
+            projectId={projectId}
+            historyLabelKey={`indicadores.historicoPagamentos.${row.id || idx}`}
           />
         ))}
         <Button
@@ -347,6 +450,8 @@ const IndicadoresForm: React.FC<Props> = ({
             }
             readOnly={readOnly}
             label={`Relatório ${idx + 1}`}
+            projectId={projectId}
+            historyLabelKey={`indicadores.historicoVendas.${row.id || idx}`}
           />
         ))}
         <Button
@@ -371,6 +476,8 @@ const IndicadoresForm: React.FC<Props> = ({
           onFileChange={(f) => updateSimpleFile("paretoVendas", f)}
           readOnly={readOnly}
           label="Pareto de Vendas"
+          projectId={projectId}
+          historyLabelKey="indicadores.paretoVendas"
         />
         <DocumentValidationRow
           item={data.paretoFornecedores}
@@ -378,6 +485,8 @@ const IndicadoresForm: React.FC<Props> = ({
           onFileChange={(f) => updateSimpleFile("paretoFornecedores", f)}
           readOnly={readOnly}
           label="Pareto de Fornecedores"
+          projectId={projectId}
+          historyLabelKey="indicadores.paretoFornecedores"
         />
         <DocumentValidationRow
           item={data.relatorioCusto}
@@ -385,6 +494,8 @@ const IndicadoresForm: React.FC<Props> = ({
           onFileChange={(f) => updateSimpleFile("relatorioCusto", f)}
           readOnly={readOnly}
           label="Relatório de Custo"
+          projectId={projectId}
+          historyLabelKey="indicadores.relatorioCusto"
         />
         <DocumentValidationRow
           item={data.relatorioCentroCusto}
@@ -392,11 +503,13 @@ const IndicadoresForm: React.FC<Props> = ({
           onFileChange={(f) => updateSimpleFile("relatorioCentroCusto", f)}
           readOnly={readOnly}
           label="Relatório de Centro de Custo"
+          projectId={projectId}
+          historyLabelKey="indicadores.relatorioCentroCusto"
         />
       </Paper>
 
       {/* ── Salvar ── */}
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
+      <Box sx={{ display: "flex", justifyContent: "flex-start", mt: 1 }}>
         <Button type="submit" variant="contained" disabled={readOnly || saving}>
           {saving ? (
             <>

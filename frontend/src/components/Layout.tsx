@@ -154,8 +154,6 @@ const Layout: React.FC = () => {
   const isMaster = effectiveRoles.includes('MASTER')
   const isAdmin = effectiveRoles.includes('ADMIN')
 
-  console.log('[Layout] user=', user, 'tokenRoles=', normalizedRoles, 'localRole=', localRole, 'effectiveRoles=', effectiveRoles)
-
   return (
     <Box sx={{ display: 'flex' }}>
       <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>

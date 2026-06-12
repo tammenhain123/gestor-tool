@@ -20,6 +20,7 @@ interface BankStatementRowProps {
   readOnly?: boolean;
   index: number;
   projectId?: string;
+  historyLabelKey?: string | null;
 }
 
 const maskAccountNumber = (value: string): string => {
@@ -51,6 +52,7 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
   onDelete,
   readOnly = false,
   projectId,
+  historyLabelKey,
 }) => {
   const { t } = useTranslation();
 
@@ -186,6 +188,7 @@ const BankStatementRow: React.FC<BankStatementRowProps> = ({
             file={(item as any).file || null}
             fileName={item.originalName || null}
             s3Key={item.s3Key || null}
+            historyLabelKey={historyLabelKey}
             disabled={readOnly}
             buttonLabel={t("compliance.attachButton", "Anexar")}
             accept=".pdf"

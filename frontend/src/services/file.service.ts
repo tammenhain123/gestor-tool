@@ -38,6 +38,15 @@ export async function uploadProjectFile(
   tabName?: string,
   fieldName?: string,
 ) {
+  const isLocalhost =
+    typeof window !== "undefined" &&
+    ["localhost", "127.0.0.1"].includes(window.location.hostname);
+
+  if (isLocalhost) {
+    const backendRes = await uploadViaBackend(projectId, file, projectName, tabName, fieldName);
+    return { key: backendRes?.key, id: backendRes?.id, via: "backend" as const };
+  }
+
   try {
     const signed = await presign(projectId, file.name, projectName, tabName, fieldName);
     const uploadRes = await fetch(signed.url, {

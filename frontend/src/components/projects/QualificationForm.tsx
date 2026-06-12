@@ -75,19 +75,6 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
     const [uploadedName, setUploadedName] = useState<string | null>(mergedInitial?.contratoName ?? null)
     const [uploadedMeta, setUploadedMeta] = useState<any>(null)
 
-    // debug logging for uploaded name/key/state
-    React.useEffect(() => {
-      console.log('QualificationForm mount/state (top):', {
-        uploadedName,
-        uploadedKey,
-        uploadedMeta,
-        dataContratoFile: data?.contratoFile?.name ?? null,
-        dataContratoName: data?.contratoName ?? null,
-        initialContratoName: initial?.contratoName ?? initial?.contrato_name ?? null,
-      })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [uploadedName, uploadedKey, uploadedMeta, data?.contratoFile, data?.contratoName, initial?.contratoName])
-
   React.useEffect(() => {
     // Merge only the keys actually provided by `initial` into the current
     // state. Avoid applying `defaultData` here because that will overwrite
@@ -288,7 +275,7 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
             const tabName = 'Qualificação de contrato'
             const uploaded = await uploadProjectFile(projectIdToUse, file, propProjectName, tabName)
             const { saveMetadata } = await import('../../services/file.service')
-            const savedMeta = await saveMetadata(saved.projectId || (saved.project && saved.project.id) || (payload.projectId), {
+            const savedMeta = await saveMetadata(projectIdToUse, {
               key: uploaded.key,
               originalName: file.name,
               mimeType: file.type,
@@ -374,15 +361,12 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
   }
 
   const lookupCnae = async (code: string, activityPath: string, setDesc: (v: string | null) => void, setErr: (v: string | null) => void) => {
-    console.log('lookupCnae called with', code)
     const cleaned = (code || '').replace(/\D/g, '')
-    console.log('lookupCnae cleaned ->', cleaned)
     if (!cleaned) return
     setErr(null)
     setDesc(null)
     try {
       const data = await getCnaeClass(cleaned)
-      console.log('getCnaeClass result for', cleaned, data)
       if (!data) {
         setErr('CNAE não encontrado')
         return
@@ -564,12 +548,12 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
                 file={data?.contratoFile}
                 fileName={data?.contratoFile?.name || uploadedName || data?.contratoName || initial?.contratoName || null}
                 s3Key={uploadedKey}
+                historyQualificationId={initial?.id || data?.id || null}
                 disabled={isReadOnly}
                 buttonLabel="Anexar Contrato Social"
                 uploadedBy={uploadedMeta?.uploadedBy || null}
                 uploadedAt={uploadedMeta?.createdAt || uploadedMeta?.updatedAt || null}
                 onChange={(f) => {
-                  console.log('Selected contrato file:', f?.name ?? null)
                   setPath('contratoFile', f)
                   if (f) {
                     setUploadedMeta(null)

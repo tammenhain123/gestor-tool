@@ -1,4 +1,5 @@
 import React from "react";
+import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
@@ -14,9 +15,10 @@ import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
-import AttachFileIcon from "@mui/icons-material/AttachFile";
 import { PatrimonialGood } from "../../../../types/compliance";
 import { useTranslation } from "react-i18next";
+import AttachmentControl from "../../../common/AttachmentControl";
+import { saveMetadata, uploadProjectFile } from "../../../../services/file.service";
 import { maskCpfCnpj,
   maskPhone,
   maskCurrency,
@@ -32,6 +34,8 @@ interface PatrimonialGoodFormProps {
   onClose: () => void;
   onSave: (item: PatrimonialGood) => void;
   readOnly?: boolean;
+  projectId?: string;
+  projectName?: string;
 }
 
 const PatrimonialGoodForm: React.FC<PatrimonialGoodFormProps> = ({
@@ -40,8 +44,11 @@ const PatrimonialGoodForm: React.FC<PatrimonialGoodFormProps> = ({
   onClose,
   onSave,
   readOnly = false,
+  projectId,
+  projectName,
 }) => {
   const { t } = useTranslation();
+  const draftId = React.useRef(`draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
 
   const createEmptyForm = React.useCallback(
     (): PatrimonialGood => ({
@@ -69,6 +76,7 @@ const PatrimonialGoodForm: React.FC<PatrimonialGoodFormProps> = ({
   const [formData, setFormData] = React.useState<PatrimonialGood>(
     item || createEmptyForm(),
   );
+  const [uploadError, setUploadError] = React.useState<string | null>(null);
 
   // Estado separado apenas para exibição dos campos mascarados
   const [display, setDisplay] = React.useState({
@@ -161,19 +169,58 @@ const PatrimonialGoodForm: React.FC<PatrimonialGoodFormProps> = ({
   };
 
   const handleAttachmentChange =
-    (attachmentType: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
+    (attachmentType: string, label: string) => async (file: File | null) => {
+      if (!file) {
         setFormData((prev) => ({
           ...prev,
           data: {
             ...prev.data,
             attachments: {
               ...prev.data.attachments,
-              [attachmentType]: `file-${Date.now()}`,
+              [attachmentType]: "",
             },
           },
         }));
+        return;
+      }
+
+      if (!projectId) {
+        setUploadError("Projeto indisponível para enviar o arquivo.");
+        return;
+      }
+
+      try {
+        setUploadError(null);
+        const labelKey = `capacidade.patrimonialGood.${formData.id || item?.id || draftId.current}.${attachmentType}`;
+        const uploaded = await uploadProjectFile(
+          projectId,
+          file,
+          projectName,
+          "Bens Patrimoniais",
+          labelKey,
+        );
+
+        const savedMeta = await saveMetadata(projectId, {
+          key: uploaded.key,
+          originalName: file.name,
+          mimeType: file.type,
+          size: file.size,
+          labelKey,
+        });
+
+        setFormData((prev) => ({
+          ...prev,
+          data: {
+            ...prev.data,
+            attachments: {
+              ...prev.data.attachments,
+              [attachmentType]: savedMeta?.s3Key || uploaded.key,
+            },
+          },
+        }));
+      } catch (err) {
+        console.error(`Error uploading patrimonial good attachment ${label}:`, err);
+        setUploadError("Falha ao enviar o arquivo. Tente novamente.");
       }
     };
 
@@ -376,6 +423,11 @@ const PatrimonialGoodForm: React.FC<PatrimonialGoodFormProps> = ({
             <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
               {t("compliance.attachments", "Anexos do Bem")}
             </Typography>
+            {uploadError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {uploadError}
+              </Alert>
+            )}
             <Grid container spacing={2}>
               {[
                 { key: "apresentacaoBem", label: "Apresentação do Bem" },
@@ -383,36 +435,39 @@ const PatrimonialGoodForm: React.FC<PatrimonialGoodFormProps> = ({
                 { key: "itr", label: "ITR" },
                 { key: "car", label: "CAR" },
                 { key: "topografia", label: "Topografia" },
-              ].map(({ key, label }) => (
-                <Grid item xs={12} sm={6} key={key}>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    component="label"
-                    fullWidth
-                    disabled={readOnly}
-                    startIcon={<AttachFileIcon />}
-                    sx={{ color: "#ffffff", textTransform: "none" }}
-                  >
-                    {t("compliance.attach", "Anexar")} {label}
-                    <input type="file" hidden onChange={handleAttachmentChange(key)} />
-                  </Button>
-                  {formData.data.attachments?.[key as keyof any] && (
-                    <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: "#666" }}>
-                      ✓ {label}
+              ].map(({ key, label }) => {
+                const s3Key = formData.data.attachments?.[key as keyof any] || "";
+                const labelKey = `capacidade.patrimonialGood.${formData.id || item?.id || draftId.current}.${key}`;
+
+                return (
+                  <Grid item xs={12} sm={6} key={key}>
+                    <Typography variant="body2" sx={{ mb: 0.75, fontWeight: 500 }}>
+                      {label}
                     </Typography>
-                  )}
-                </Grid>
-              ))}
+                    <AttachmentControl
+                      projectId={projectId}
+                      file={null}
+                      fileName={s3Key ? String(s3Key).split("/").pop() : null}
+                      s3Key={s3Key || null}
+                      historyLabelKey={labelKey}
+                      disabled={readOnly}
+                      buttonLabel={t("compliance.attach", "Anexar")}
+                      onChange={handleAttachmentChange(key, label)}
+                      onError={setUploadError}
+                      compact
+                    />
+                  </Grid>
+                );
+              })}
             </Grid>
           </Paper>
         </Box>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>{t("common.cancel", "Cancelar")}</Button>
+      <DialogActions sx={{ justifyContent: "flex-start" }}>
         <Button variant="contained" onClick={handleSave} disabled={readOnly}>
           {t("common.save", "Salvar")}
         </Button>
+        <Button onClick={onClose}>{t("common.cancel", "Cancelar")}</Button>
       </DialogActions>
     </Dialog>
   );

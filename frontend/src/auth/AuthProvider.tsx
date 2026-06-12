@@ -31,24 +31,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const storedLocal = localStorage.getItem('auth')
     const storedSession = sessionStorage.getItem('auth')
     const used = storedLocal || storedSession
-    // debug: show storage keys and origin
-    // eslint-disable-next-line no-console
-    console.log('[AuthProvider] origin=', location.origin, 'localKeys=', Object.keys(localStorage), 'sessionKeys=', Object.keys(sessionStorage))
     if (used) {
       try {
         const data: TokenResponse = JSON.parse(used)
         setToken(data.access_token)
         const parsed: any = jwtDecode(data.access_token)
-        // Debug: show token payload and roles for troubleshooting
-        try {
-          const roles = parsed?.realm_access?.roles ?? parsed?.roles ?? parsed?.role ?? []
-          // eslint-disable-next-line no-console
-          console.debug('[AuthProvider] token payload', parsed)
-          // eslint-disable-next-line no-console
-          console.debug('[AuthProvider] roles detected', roles)
-        } catch (e) {
-          // ignore logging errors
-        }
         const profile: User = {
           username: parsed.preferred_username || parsed.username || '',
           email: parsed.email,
@@ -182,9 +169,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // Fallback: treat as token-based response
-        // debug: log token receipt
-        // eslint-disable-next-line no-console
-        console.log('[AuthProvider] token received', { hasAccessToken: !!resp.access_token, expires_in: resp.expires_in })
         setToken(resp.access_token)
         const parsed: any = jwtDecode(resp.access_token)
         const profile: User = {
@@ -192,23 +176,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: parsed.email,
           tenant_id: parsed.tenant_id || parsed.tid
         }
-        // Debug: show token payload and roles on login
-        try {
-          const roles = parsed?.realm_access?.roles ?? parsed?.roles ?? parsed?.role ?? []
-          // eslint-disable-next-line no-console
-          console.debug('[AuthProvider] token payload (login)', parsed)
-          // eslint-disable-next-line no-console
-          console.debug('[AuthProvider] roles detected (login)', roles)
-        } catch (e) {
-          // ignore
-        }
         setUser(profile)
-        // save to both storages for debugging across origins
         localStorage.setItem('auth', JSON.stringify(resp))
         sessionStorage.setItem('auth', JSON.stringify(resp))
-        // debug: confirm saved
-        // eslint-disable-next-line no-console
-        console.log('[AuthProvider] saved auth to localStorage?', !!localStorage.getItem('auth'), 'sessionStorage?', !!sessionStorage.getItem('auth'))
         // attach interceptor that reads token from storage at request time
         attachTokenInterceptor(() => {
           try {

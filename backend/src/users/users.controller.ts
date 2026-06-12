@@ -34,12 +34,6 @@ export class UsersController {
         }
       : null
 
-    // debug log to help frontend role troubleshooting
-    try {
-      // eslint-disable-next-line no-console
-      console.log('[UsersController.me] dbUser role=', db?.role ?? null, 'keycloakId=', keycloakId)
-    } catch (e) {}
-
     return {
       userId: user.sub,
       username,
@@ -103,11 +97,6 @@ export class UsersController {
         Object.values(uAny.resource_access).some((entry: any) => Array.isArray(entry.roles) && entry.roles.includes('MASTER')))
 
     if (hasAdmin || hasMaster) {
-      // debug log
-      try {
-        // eslint-disable-next-line no-console
-        console.log('[UsersController.getById] allowed by token role, returning user id=', dbUser.id, 'role=', dbUser.role)
-      } catch (e) {}
       return {
         id: dbUser.id,
         keycloakId: dbUser.keycloakId,

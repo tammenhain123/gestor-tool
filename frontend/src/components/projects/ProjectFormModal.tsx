@@ -111,9 +111,9 @@ const ProjectFormModal: React.FC<Props> = ({ open, onClose, onSave, project, sav
           <TextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} multiline rows={4} />
         </Box>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={saving}>Cancel</Button>
+      <DialogActions sx={{ justifyContent: 'flex-start' }}>
         <Button onClick={handleSave} variant="contained" disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
+        <Button onClick={onClose} disabled={saving}>Cancel</Button>
       </DialogActions>
     </Dialog>
   )

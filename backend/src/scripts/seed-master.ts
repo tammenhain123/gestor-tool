@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import { Logger } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import { AppModule } from '../app.module'
 import { getRepositoryToken } from '@nestjs/typeorm'
@@ -6,6 +7,7 @@ import { Repository } from 'typeorm'
 import { User, Role } from '../users/user.entity'
 
 async function bootstrap() {
+  const logger = new Logger('SeedMaster')
   const app = await NestFactory.createApplicationContext(AppModule)
 
   try {
@@ -14,14 +16,14 @@ async function bootstrap() {
     const username = 'MasterUser'
     const email = 'luizrobertoff@gestortool.com.br'
 
-    console.log('Checking MASTER user...')
+    logger.log('Checking MASTER user...')
 
     const exists = await userRepo.findOne({
       where: { role: Role.MASTER },
     })
 
     if (exists) {
-      console.log('MASTER already exists.')
+      logger.log('MASTER already exists.')
       return
     }
 
@@ -34,9 +36,9 @@ async function bootstrap() {
 
     await userRepo.save(user)
 
-    console.log('MASTER created successfully.')
+    logger.log('MASTER created successfully.')
   } catch (err) {
-    console.error('Seed error:', err)
+    logger.error('Seed error', err as any)
   } finally {
     await app.close()
   }

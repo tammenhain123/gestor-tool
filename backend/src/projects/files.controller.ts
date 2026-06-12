@@ -1,4 +1,4 @@
-import { Controller, Post, UseInterceptors, UploadedFile, Param, Get, Res, Body, Query, HttpCode, Logger } from '@nestjs/common'
+import { BadRequestException, Controller, Post, UseInterceptors, UploadedFile, Param, Get, Res, Body, Query, Logger } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { S3Service } from '../s3/s3.service'
 import { ProjectFilesService } from './files.service'
@@ -13,6 +13,10 @@ export class ProjectFilesController {
   @Post()
   @UseInterceptors(FileInterceptor('file', { storage: multer.memoryStorage() }))
   async uploadViaBackend(@Param('projectId') projectId: string, @UploadedFile() file: Express.Multer.File, @Body() body: any) {
+    if (!file) {
+      this.logger.warn(`uploadViaBackend called without file for project=${projectId}`)
+      throw new BadRequestException('Arquivo não enviado')
+    }
     // allow client to supply a friendly projectName to create a folder name
     const rawName = (body && body.projectName) ? String(body.projectName) : projectId
     const tabRaw = (body && body.tabName) ? String(body.tabName) : null
@@ -23,16 +27,7 @@ export class ProjectFilesController {
     const fieldFolder = fieldRaw ? sanitize(fieldRaw) : null
     const key = tabFolder ? (fieldFolder ? `projects/${folder}/${tabFolder}/${fieldFolder}/${Date.now()}_${file.originalname}` : `projects/${folder}/${tabFolder}/${Date.now()}_${file.originalname}`) : (fieldFolder ? `projects/${folder}/${fieldFolder}/${Date.now()}_${file.originalname}` : `projects/${folder}/${Date.now()}_${file.originalname}`)
     await this.s3.uploadBuffer(key, file.buffer, file.mimetype)
-    const saved = await this.filesService.create({
-      projectId,
-      s3Key: key,
-      originalName: file.originalname,
-      mimeType: file.mimetype,
-      size: file.size,
-      labelKey: fieldRaw || undefined,
-      uploadedBy: body?.uploadedBy,
-    })
-    return { key, id: saved.id }
+    return { key }
   }
 
   @Post('presign')
@@ -53,110 +48,6 @@ export class ProjectFilesController {
   @Post('metadata')
   async saveMetadata(@Param('projectId') projectId: string, @Body() body: { key: string; originalName: string; mimeType?: string; size?: number; uploadedBy?: string; qualificationId?: string; capacityId?: string; companyId?: string; replaceOriginalName?: string; labelKey?: string }) {
     this.logger.log(`saveMetadata called for project=${projectId} body=${JSON.stringify(body)}`)
-    // If a qualificationId is provided, try to replace existing file for that qualification
-    if (body.qualificationId) {
-      const existing = await this.filesService.findByQualification(projectId, body.qualificationId)
-      if (existing) {
-        // delete old S3 object if key changed
-        try {
-          if (existing.s3Key && existing.s3Key !== body.key) await this.s3.deleteObject(existing.s3Key)
-        } catch (e) {
-          this.logger.warn(`Failed to delete old S3 object ${existing.s3Key}: ${e}`)
-        }
-        const updated = await this.filesService.update(existing.id, {
-          s3Key: body.key,
-          originalName: body.originalName,
-          mimeType: body.mimeType || 'application/octet-stream',
-          size: body.size || 0,
-          uploadedBy: body.uploadedBy,
-          companyId: body.companyId,
-          capacityId: body.capacityId,
-          labelKey: body.labelKey,
-        })
-        this.logger.log(`Updated existing file id=${existing.id} -> key=${updated?.s3Key} originalName=${updated?.originalName}`)
-        return updated
-      }
-    }
-
-    // If a capacityId is provided, try to replace existing file for that capacity
-    if (body.capacityId) {
-      const existing = await this.filesService.findByCapacity(projectId, body.capacityId)
-      if (existing) {
-        try {
-          if (existing.s3Key && existing.s3Key !== body.key) await this.s3.deleteObject(existing.s3Key)
-        } catch (e) {
-          this.logger.warn(`Failed to delete old S3 object ${existing.s3Key}: ${e}`)
-        }
-        const updated = await this.filesService.update(existing.id, {
-          s3Key: body.key,
-          originalName: body.originalName,
-          mimeType: body.mimeType || 'application/octet-stream',
-          size: body.size || 0,
-          uploadedBy: body.uploadedBy,
-          companyId: body.companyId,
-          labelKey: body.labelKey,
-        })
-        this.logger.log(`Updated existing file id=${existing.id} -> key=${updated?.s3Key} originalName=${updated?.originalName}`)
-        return updated
-      }
-    }
-
-    // If caller provided a replaceOriginalName, try to find existing by originalName and update it
-    if (body.replaceOriginalName) {
-      try {
-        const existing = await this.filesService.findByOriginalName(projectId, body.replaceOriginalName)
-        if (existing) {
-          try {
-            if (existing.s3Key && existing.s3Key !== body.key) await this.s3.deleteObject(existing.s3Key)
-          } catch (e) {
-            this.logger.warn(`Failed to delete old S3 object ${existing.s3Key}: ${e}`)
-          }
-          const updated = await this.filesService.update(existing.id, {
-            s3Key: body.key,
-            originalName: body.originalName,
-            mimeType: body.mimeType || 'application/octet-stream',
-            size: body.size || 0,
-            uploadedBy: body.uploadedBy,
-            companyId: body.companyId,
-            labelKey: body.labelKey,
-          })
-          this.logger.log(`Replaced existing file id=${existing.id} -> key=${updated?.s3Key} originalName=${updated?.originalName}`)
-          return updated
-        }
-      } catch (e) {
-        this.logger.warn(`replace by originalName failed: ${e}`)
-      }
-    }
-
-      // If caller provided a labelKey, try to find existing file for the same labelKey and update it
-      if (body.labelKey) {
-        try {
-          const existingByLabel = await this.filesService.findByLabelKey(projectId, body.labelKey)
-          if (existingByLabel) {
-            try {
-              if (existingByLabel.s3Key && existingByLabel.s3Key !== body.key) await this.s3.deleteObject(existingByLabel.s3Key)
-            } catch (e) {
-              this.logger.warn(`Failed to delete old S3 object ${existingByLabel.s3Key}: ${e}`)
-            }
-            const updated = await this.filesService.update(existingByLabel.id, {
-              s3Key: body.key,
-              originalName: body.originalName,
-              mimeType: body.mimeType || 'application/octet-stream',
-              size: body.size || 0,
-              uploadedBy: body.uploadedBy,
-              companyId: body.companyId,
-              qualificationId: body.qualificationId,
-              capacityId: body.capacityId,
-              labelKey: body.labelKey,
-            })
-            this.logger.log(`Updated existing file (by labelKey) id=${existingByLabel.id} -> key=${updated?.s3Key} originalName=${updated?.originalName}`)
-            return updated
-          }
-        } catch (e) {
-          this.logger.warn(`findByLabelKey failed: ${e}`)
-        }
-      }
-
     const saved = await this.filesService.create({
       projectId,
       s3Key: body.key,

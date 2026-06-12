@@ -20,6 +20,8 @@ import AvaliacaoCenarioForm from "../components/projects/AvaliacaoCenarioForm";
 import QualificationForm from "../components/projects/QualificationForm";
 import IndicadoresForm from "../components/projects/IndicadoresForm";
 import { useTranslation } from "react-i18next";
+import AttachmentControl from "../components/common/AttachmentControl";
+import { saveMetadata, uploadProjectFile } from "../services/file.service";
 
 const TabPanel: React.FC<{
   children?: React.ReactNode;
@@ -47,7 +49,14 @@ const ProjectDetail: React.FC = () => {
   const { t } = useTranslation();
 
   const [forms, setForms] = useState(
-    Array.from({ length: 9 }, () => ({ text: "", file: null as File | null })),
+    Array.from({ length: 9 }, () => ({
+      text: "",
+      file: null as File | null,
+      originalName: "",
+      s3Key: "",
+      uploadedBy: "",
+      uploadedAt: "",
+    })),
   );
 
   useEffect(() => {
@@ -99,7 +108,14 @@ const ProjectDetail: React.FC = () => {
 
   const handleFormChange = (
     index: number,
-    updates: Partial<{ text: string; file: File | null }>,
+    updates: Partial<{
+      text: string;
+      file: File | null;
+      originalName: string;
+      s3Key: string;
+      uploadedBy: string;
+      uploadedAt: string;
+    }>,
   ) => {
     setForms((prev) => {
       const next = prev.slice();
@@ -108,9 +124,32 @@ const ProjectDetail: React.FC = () => {
     });
   };
 
-  const handleSave = (index: number) => {
+  const handleSave = async (index: number) => {
     const entry = forms[index];
-    console.log("Save tab", index + 1, entry);
+    if (id && entry.file instanceof File) {
+      const labelKey = `projectDetail.tab.${index + 1}`;
+      const uploaded = await uploadProjectFile(
+        id,
+        entry.file,
+        project?.name,
+        `Aba ${index + 1}`,
+        labelKey,
+      );
+      const savedMeta = await saveMetadata(id, {
+        key: uploaded.key,
+        originalName: entry.file.name,
+        mimeType: entry.file.type,
+        size: entry.file.size,
+        labelKey,
+      });
+      handleFormChange(index, {
+        file: null,
+        originalName: savedMeta?.originalName || entry.file.name,
+        s3Key: savedMeta?.s3Key || uploaded.key,
+        uploadedBy: savedMeta?.uploadedBy || "",
+        uploadedAt: savedMeta?.createdAt || savedMeta?.updatedAt || "",
+      });
+    }
     alert(`Saved tab ${index + 1}`);
   };
 
@@ -272,7 +311,6 @@ const ProjectDetail: React.FC = () => {
                 projectId={id}
                 projectName={project?.name}
                 onSave={async (data) => {
-                  console.log("Requisitos saved", data);
                   setToast({ type: "success", message: "Requisitos salvos" });
                   return data;
                 }}
@@ -304,7 +342,12 @@ const ProjectDetail: React.FC = () => {
                 component="form"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  handleSave(i);
+                  handleSave(i).catch((err) => {
+                    setToast({
+                      type: "error",
+                      message: "Erro ao salvar arquivo da aba.",
+                    });
+                  });
                 }}
                 sx={{ display: "flex", flexDirection: "column", gap: 2 }}
               >
@@ -317,23 +360,23 @@ const ProjectDetail: React.FC = () => {
                   multiline
                 />
                 <Stack direction="row" alignItems="center" spacing={2}>
-                  <Button variant="outlined" component="label">
-                    Enviar documento
-                    <input
-                      type="file"
-                      hidden
-                      onChange={(e) =>
-                        handleFormChange(i, {
-                          file: e.target.files?.[0] ?? null,
-                        })
-                      }
-                    />
-                  </Button>
-                  <Typography variant="body2">
-                    {forms[i].file
-                      ? forms[i].file.name
-                      : t("projectDetail.noFile")}
-                  </Typography>
+                  <AttachmentControl
+                    projectId={id}
+                    file={forms[i].file}
+                    fileName={forms[i].file?.name || forms[i].originalName || null}
+                    s3Key={forms[i].s3Key || null}
+                    historyLabelKey={`projectDetail.tab.${i + 1}`}
+                    buttonLabel="Enviar documento"
+                    uploadedBy={forms[i].uploadedBy || null}
+                    uploadedAt={forms[i].uploadedAt || null}
+                    onChange={(file) => handleFormChange(i, { file })}
+                    onError={(message) =>
+                      setToast({
+                        type: "error",
+                        message,
+                      })
+                    }
+                  />
                 </Stack>
                 <Box>
                   <Button type="submit" variant="contained">
