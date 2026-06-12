@@ -1,178 +1,528 @@
-import React, { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
-import Box from '@mui/material/Box'
-import Grid from '@mui/material/Grid'
-import TextField from '@mui/material/TextField'
-import Button from '@mui/material/Button'
-import Paper from '@mui/material/Paper'
-import Typography from '@mui/material/Typography'
-import Stack from '@mui/material/Stack'
-import Checkbox from '@mui/material/Checkbox'
-import IconButton from '@mui/material/IconButton'
-import Tooltip from '@mui/material/Tooltip'
-import InfoIcon from '@mui/icons-material/Info'
-import FilePreview from '../common/FilePreview'
-import { presign, saveMetadata } from '../../services/file.service'
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import Stack from "@mui/material/Stack";
+import Divider from "@mui/material/Divider";
+import AddIcon from "@mui/icons-material/Add";
+import CircularProgress from "@mui/material/CircularProgress";
+import Alert from "@mui/material/Alert";
+import DocumentValidationRow from "./capacidade/components/DocumentValidationRow";
+import { DocumentItem } from "../../types/compliance";
+import { api } from "../../services/api";
+import { saveMetadata, uploadProjectFile } from "../../services/file.service";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface HistoricoSection {
+  rows: DocumentItem[];
+}
+
+interface IndicadoresData {
+  vendasPorCliente: DocumentItem;
+  historicoProdução: HistoricoSection;
+  historicoPagamentos: HistoricoSection;
+  historicoVendas: HistoricoSection;
+  paretoVendas: DocumentItem;
+  paretoFornecedores: DocumentItem;
+  relatorioCusto: DocumentItem;
+  relatorioCentroCusto: DocumentItem;
+}
 
 type Props = {
-  initial?: any
-  onSave?: (data: any) => void
-  projectId?: string
-  projectName?: string
-}
+  projectId: string;
+  projectName?: string;
+  initial?: Partial<IndicadoresData>;
+  onSave?: (data: IndicadoresData) => Promise<any> | void;
+  readOnly?: boolean;
+};
 
-const IndicadoresForm: React.FC<Props> = ({ initial, onSave, projectId, projectName }) => {
-  const { t } = useTranslation()
-  const [reports, setReports] = useState(() => (Array.isArray(initial?.reports) && initial.reports.length > 0 ? initial.reports.map((r: any) => ({ ...r, file: null })) : [{ key: 'vendas_por_cliente', label: 'Relatório de vendas por clientes', descricao: '', date: '', file: null }]))
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-  const setReport = (i: number, patch: any) => setReports((prev) => { const next = prev.slice(); next[i] = { ...next[i], ...patch }; return next })
+const emptyDoc = (description = ""): DocumentItem => ({
+  name: description,
+  isRequested: false,
+  description,
+  status: undefined,
+  validationDate: undefined,
+  originalName: undefined,
+});
 
-  const submit = async (e?: React.FormEvent) => {
-    e?.preventDefault()
-    // normalize reports to include single `date` field
-    const payload = { reports: reports.map((r: any) => ({ ...r, date: r.date || r.startDate || r.endDate || null })) }
-    if (projectId) {
-      try {
-        const tabName = t('indicadores.title')
-        const uploads: Promise<any>[] = []
-        for (const r of reports) {
-          if (r?.file && r.file instanceof File) {
-            const field = r.key || r.label
-            try {
-              const p = await presign(projectId, r.file.name, projectName, tabName, field)
-              const uploadRes = await fetch(p.url, { method: 'PUT', headers: { 'Content-Type': r.file.type || 'application/octet-stream' }, body: r.file })
-              if (!uploadRes.ok) throw new Error('S3 upload failed')
-              const meta = await saveMetadata(projectId, { key: p.key, originalName: r.file.name, mimeType: r.file.type, size: r.file.size, labelKey: field })
-              uploads.push(Promise.resolve(meta))
-            } catch (e) {
-              // fallback: backend upload
-              try {
-                const fd = new FormData()
-                fd.append('file', r.file)
-                if (projectName) fd.append('projectName', projectName)
-                fd.append('tabName', tabName)
-                fd.append('fieldName', field)
-                const uploadResp = await fetch(`/api/projects/${projectId}/files`, { method: 'POST', body: fd })
-                const json = await uploadResp.json()
-                if (json && json.key) {
-                  const metaSaved = await saveMetadata(projectId, { key: json.key, originalName: r.file.name, mimeType: r.file.type, size: r.file.size, labelKey: field })
-                  uploads.push(Promise.resolve(metaSaved))
-                }
-              } catch (e2) { console.error('upload failed', e2) }
-            }
-          }
-        }
-        const saved = uploads.length ? (await Promise.all(uploads)).filter(Boolean) : []
-        // merge metadata into payload
-        const metaByName = new Map(saved.map((m: any) => [m.originalName, m]))
-        const final = { reports: reports.map((r: any) => ({ ...r, file: undefined, date: r.date || r.startDate || r.endDate || null, s3Key: r.s3Key || (r.file ? (metaByName.get(r.file.name)?.s3Key || metaByName.get(r.file.name)?.key) : undefined), originalName: r.originalName || (r.file ? (metaByName.get(r.file.name)?.originalName) : undefined) })) }
-        if (onSave) await onSave(final)
-        // persist to backend indicators endpoint
-        try {
-          const { saveIndicators } = await import('../../services/project.service')
-          await saveIndicators(projectId, final)
-        } catch (e) {
-          console.warn('Failed to persist indicadores to backend', e)
-        }
-        return
-      } catch (e) {
-        console.error('Erro ao salvar indicadores', e)
-        if (onSave) await onSave(payload)
-        return
-      }
-    }
-    if (onSave) await onSave(payload)
-  }
+const emptyHistorico = (): HistoricoSection => ({
+  rows: [emptyDoc()],
+});
+
+const buildInitial = (initial?: Partial<IndicadoresData>): IndicadoresData => ({
+  vendasPorCliente:
+    initial?.vendasPorCliente || emptyDoc("Relatório de Vendas por Cliente"),
+  historicoProdução: initial?.historicoProdução || emptyHistorico(),
+  historicoPagamentos: initial?.historicoPagamentos || emptyHistorico(),
+  historicoVendas: initial?.historicoVendas || emptyHistorico(),
+  paretoVendas: initial?.paretoVendas || emptyDoc("Pareto de Vendas"),
+  paretoFornecedores:
+    initial?.paretoFornecedores || emptyDoc("Pareto de Fornecedores"),
+  relatorioCusto: initial?.relatorioCusto || emptyDoc("Relatório de Custo"),
+  relatorioCentroCusto:
+    initial?.relatorioCentroCusto || emptyDoc("Relatório de Centro de Custo"),
+});
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+const IndicadoresForm: React.FC<Props> = ({
+  projectId,
+  projectName,
+  initial,
+  onSave,
+  readOnly = false,
+}) => {
+  const { t } = useTranslation();
+  const [data, setData] = useState<IndicadoresData>(() =>
+    buildInitial(initial),
+  );
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // ── Load indicadores on mount ───────────────────────────────────────────────
 
   useEffect(() => {
-    const applyInitialReports = async () => {
+    const loadIndicadores = async () => {
       try {
-        let files: any[] = []
-        if (projectId) {
-          const { list } = await import('../../services/file.service')
-          files = await list(projectId)
+        setLoading(true);
+        setError(null);
+        const response = await api.get(`/projects/${projectId}/indicators`);
+        if (response.data) {
+          setData(buildInitial(response.data));
+        } else {
+          setData(buildInitial(initial));
         }
-
-        if (Array.isArray(initial?.reports) && initial.reports.length > 0) {
-          setReports(initial.reports.map((r: any) => {
-            const labelKey = r.labelKey || r.key || r.label
-            // prefer files with same labelKey
-            let match: any = null
-            try {
-              const byLabel = files.filter((f) => f.labelKey === labelKey)
-              if (byLabel.length > 0) {
-                byLabel.sort((a, b) => (new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()))
-                match = byLabel[0]
-              } else {
-                const byName = files.filter((f) => f.originalName === r.originalName)
-                if (byName.length > 0) {
-                  byName.sort((a, b) => (new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()))
-                  match = byName[0]
-                } else {
-                  match = files.find((f) => f.s3Key === r.s3Key)
-                }
-              }
-            } catch (e) {
-              console.warn('Error matching indicadores files', e)
-            }
-
-            return { ...r, file: null, labelKey, s3Key: match?.s3Key || r.s3Key, originalName: match?.originalName || r.originalName, createdAt: match?.createdAt || r.createdAt, uploadedBy: match?.uploadedBy || r.uploadedBy }
-          }))
-          return
+      } catch (err: any) {
+        if (err.response?.status === 404) {
+          // No indicators yet
+          setData(buildInitial(initial));
+        } else {
+          console.error("Error loading indicadores:", err);
+          setError(
+            err.response?.data?.message ||
+              err.message ||
+              "Failed to load indicadores",
+          );
+          setData(buildInitial(initial));
         }
-
-        // autodiscover saved indicadores files if no initial provided
-        if (files.length > 0) {
-          const discovered = files.filter((f) => String(f.labelKey || '').startsWith('vendas') || String(f.labelKey || '').includes('indicadores') )
-          if (discovered.length > 0) {
-            const mapped = discovered.map((f: any, idx: number) => ({ key: f.labelKey || `report_${idx}`, label: f.labelKey || f.originalName || `Relatório ${idx + 1}`, descricao: '', date: '', file: null, s3Key: f.s3Key || f.key, originalName: f.originalName, createdAt: f.createdAt, uploadedBy: f.uploadedBy, labelKey: f.labelKey }))
-            setReports(mapped)
-          }
-        }
-      } catch (e) {
-        console.warn('Failed to map indicadores files', e)
+      } finally {
+        setLoading(false);
       }
-    }
+    };
 
-    void applyInitialReports()
-  }, [initial, projectId])
+    if (projectId) {
+      loadIndicadores();
+    }
+  }, [projectId, initial]);
+
+  // ── Simple item handlers ────────────────────────────────────────────────────
+
+  const updateSimple = (
+    field: keyof IndicadoresData,
+    updates: Partial<DocumentItem>,
+  ) =>
+    setData((prev) => ({
+      ...prev,
+      [field]: { ...(prev[field] as DocumentItem), ...updates },
+    }));
+
+  const updateSimpleFile = (field: keyof IndicadoresData, file: File | null) =>
+    setData((prev) => ({
+      ...prev,
+      [field]: {
+        ...(prev[field] as DocumentItem),
+        file,
+        originalName: file?.name,
+        mimeType: file?.type,
+        size: file?.size,
+      },
+    }));
+
+  // ── Historico section handlers ──────────────────────────────────────────────
+
+  const updateHistoricoRow = (
+    field: keyof IndicadoresData,
+    index: number,
+    updates: Partial<DocumentItem>,
+  ) =>
+    setData((prev) => {
+      const section = prev[field] as HistoricoSection;
+      const rows = section.rows.map((r, i) =>
+        i === index ? { ...r, ...updates } : r,
+      );
+      return { ...prev, [field]: { ...section, rows } };
+    });
+
+  const updateHistoricoFile = (
+    field: keyof IndicadoresData,
+    index: number,
+    file: File | null,
+  ) =>
+    setData((prev) => {
+      const section = prev[field] as HistoricoSection;
+      const rows = section.rows.map((r, i) =>
+        i === index
+          ? {
+              ...r,
+              file,
+              originalName: file?.name,
+              mimeType: file?.type,
+              size: file?.size,
+            }
+          : r,
+      );
+      return { ...prev, [field]: { ...section, rows } };
+    });
+
+  const addHistoricoRow = (field: keyof IndicadoresData) =>
+    setData((prev) => {
+      const section = prev[field] as HistoricoSection;
+      return {
+        ...prev,
+        [field]: { ...section, rows: [...section.rows, emptyDoc()] },
+      };
+    });
+
+  const removeHistoricoRow = (field: keyof IndicadoresData, index: number) =>
+    setData((prev) => {
+      const section = prev[field] as HistoricoSection;
+      return {
+        ...prev,
+        [field]: {
+          ...section,
+          rows: section.rows.filter((_, i) => i !== index),
+        },
+      };
+    });
+
+  const uploadDocument = async (
+    item: DocumentItem,
+    labelKey: string,
+    tabName: string,
+  ): Promise<DocumentItem> => {
+    if (!(item.file instanceof File)) return item;
+
+    const uploaded = await uploadProjectFile(
+      projectId,
+      item.file,
+      projectName,
+      tabName,
+      labelKey,
+    );
+
+    const savedMeta = await saveMetadata(projectId, {
+      key: uploaded.key,
+      originalName: item.file.name,
+      mimeType: item.file.type,
+      size: item.file.size,
+      replaceOriginalName: item.originalName,
+      labelKey,
+    });
+
+    return {
+      ...item,
+      s3Key: savedMeta?.s3Key || uploaded.key,
+      originalName: savedMeta?.originalName || item.file.name,
+      mimeType: savedMeta?.mimeType || item.file.type,
+      size: savedMeta?.size || item.file.size,
+      uploadedBy: savedMeta?.uploadedBy || item.uploadedBy,
+      uploadDate:
+        savedMeta?.createdAt ||
+        savedMeta?.updatedAt ||
+        new Date().toISOString(),
+      file: null,
+    };
+  };
+
+  const uploadRows = async (
+    field: keyof IndicadoresData,
+    tabName: string,
+  ): Promise<HistoricoSection> => {
+    const section = data[field] as HistoricoSection;
+    const rows = await Promise.all(
+      section.rows.map((row, idx) =>
+        uploadDocument(row, `indicadores.${field}.${row.id || idx}`, tabName),
+      ),
+    );
+    return { ...section, rows };
+  };
+
+  // ── Submit ──────────────────────────────────────────────────────────────────
+
+  const submit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (readOnly) return;
+
+    try {
+      setSaving(true);
+      setError(null);
+
+      const payload: IndicadoresData = {
+        ...data,
+        vendasPorCliente: await uploadDocument(
+          data.vendasPorCliente,
+          "indicadores.vendasPorCliente",
+          "Indicadores - Relatório de Vendas por Cliente",
+        ),
+        historicoProdução: await uploadRows(
+          "historicoProdução",
+          "Indicadores - Histórico de Produção",
+        ),
+        historicoPagamentos: await uploadRows(
+          "historicoPagamentos",
+          "Indicadores - Histórico de Pagamentos",
+        ),
+        historicoVendas: await uploadRows(
+          "historicoVendas",
+          "Indicadores - Histórico de Vendas",
+        ),
+        paretoVendas: await uploadDocument(
+          data.paretoVendas,
+          "indicadores.paretoVendas",
+          "Indicadores - Pareto de Vendas",
+        ),
+        paretoFornecedores: await uploadDocument(
+          data.paretoFornecedores,
+          "indicadores.paretoFornecedores",
+          "Indicadores - Pareto de Fornecedores",
+        ),
+        relatorioCusto: await uploadDocument(
+          data.relatorioCusto,
+          "indicadores.relatorioCusto",
+          "Indicadores - Relatório de Custo",
+        ),
+        relatorioCentroCusto: await uploadDocument(
+          data.relatorioCentroCusto,
+          "indicadores.relatorioCentroCusto",
+          "Indicadores - Relatório de Centro de Custo",
+        ),
+      };
+
+      await api.put(`/projects/${projectId}/indicators`, payload);
+      setData(payload);
+
+      if (onSave) {
+        await onSave(payload);
+      }
+    } catch (err: any) {
+      console.error("Error saving indicadores:", err);
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to save indicadores",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", p: 3 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
-    <Box component="form" onSubmit={submit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Typography variant="h6">{t('indicadores.title')}</Typography>
-      <Stack spacing={2}>
-        {reports.map((r: any, i: number) => (
-          <Paper key={i} variant="outlined" sx={{ p: 1 }}>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={4}>
-                <TextField label={t('indicadores.descricao')} fullWidth value={r.descricao || ''} onChange={(e) => setReport(i, { descricao: e.target.value })} />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField type="date" label={t('indicadores.date')} InputLabelProps={{ shrink: true }} fullWidth value={r.date || ''} onChange={(e) => setReport(i, { date: e.target.value })} />
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Button variant="outlined" component="label">{t('indicadores.attach')}
-                    <input type="file" hidden onChange={(e) => setReport(i, { file: e.target.files?.[0] ?? null })} />
-                  </Button>
-                  <Box sx={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><Typography variant="body2">{r.file?.name || r.originalName || ''}</Typography></Box>
-                  <Checkbox checked={!!(r.file || r.originalName || r.s3Key)} onClick={(e) => e.preventDefault()} sx={{ '&.Mui-checked': { color: (theme: any) => theme.palette.success.main } }} />
-                  <FilePreview projectId={projectId} file={r.file} fileName={r.file?.name || r.originalName || null} s3Key={r.s3Key || r.key || null} />
-                  <Tooltip title={t('file.info')}>
-                    <IconButton sx={{ color: 'primary.main' }}><InfoIcon fontSize="small"/></IconButton>
-                  </Tooltip>
-                </Stack>
-              </Grid>
-            </Grid>
-          </Paper>
+    <Box
+      component="form"
+      onSubmit={submit}
+      sx={{ display: "flex", flexDirection: "column", gap: 0 }}
+    >
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
+      {/* ── Relatório de Vendas por Cliente ── */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
+          RELATÓRIO DE VENDAS POR CLIENTE
+        </Typography>
+        <Divider sx={{ mb: 2 }} />
+        <DocumentValidationRow
+          item={data.vendasPorCliente}
+          onUpdate={(u) => updateSimple("vendasPorCliente", u)}
+          onFileChange={(f) => updateSimpleFile("vendasPorCliente", f)}
+          readOnly={readOnly}
+          label="Relatório de Vendas por Cliente"
+          projectId={projectId}
+          historyLabelKey="indicadores.vendasPorCliente"
+        />
+      </Paper>
+
+      {/* ── Histórico de Produção ── */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
+          HISTÓRICO DE PRODUÇÃO
+        </Typography>
+        <Divider sx={{ mb: 2 }} />
+        {data.historicoProdução.rows.map((row, idx) => (
+          <DocumentValidationRow
+            key={idx}
+            item={row}
+            onUpdate={(u) => updateHistoricoRow("historicoProdução", idx, u)}
+            onFileChange={(f) =>
+              updateHistoricoFile("historicoProdução", idx, f)
+            }
+            onDelete={
+              data.historicoProdução.rows.length > 1
+                ? () => removeHistoricoRow("historicoProdução", idx)
+                : undefined
+            }
+            readOnly={readOnly}
+            label={`Relatório ${idx + 1}`}
+            projectId={projectId}
+            historyLabelKey={`indicadores.historicoProducao.${row.id || idx}`}
+          />
         ))}
-        <Button variant="text" onClick={() => setReports((p) => [...p, { key: `report_${p.length}`, label: '', descricao: '', date: '', file: null }])}>{t('indicadores.addReport')}</Button>
-      </Stack>
-      <Box sx={{ mt: 2 }}>
-        <Button type="submit" variant="contained">{t('indicadores.saveButton')}</Button>
+        <Button
+          variant="outlined"
+          startIcon={<AddIcon />}
+          onClick={() => addHistoricoRow("historicoProdução")}
+          disabled={readOnly}
+        >
+          {t("indicadores.addReport", "Add Novo Relatório")}
+        </Button>
+      </Paper>
+
+      {/* ── Histórico de Pagamentos ── */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
+          HISTÓRICO DE PAGAMENTOS
+        </Typography>
+        <Divider sx={{ mb: 2 }} />
+        {data.historicoPagamentos.rows.map((row, idx) => (
+          <DocumentValidationRow
+            key={idx}
+            item={row}
+            onUpdate={(u) => updateHistoricoRow("historicoPagamentos", idx, u)}
+            onFileChange={(f) =>
+              updateHistoricoFile("historicoPagamentos", idx, f)
+            }
+            onDelete={
+              data.historicoPagamentos.rows.length > 1
+                ? () => removeHistoricoRow("historicoPagamentos", idx)
+                : undefined
+            }
+            readOnly={readOnly}
+            label={`Relatório ${idx + 1}`}
+            projectId={projectId}
+            historyLabelKey={`indicadores.historicoPagamentos.${row.id || idx}`}
+          />
+        ))}
+        <Button
+          variant="outlined"
+          startIcon={<AddIcon />}
+          onClick={() => addHistoricoRow("historicoPagamentos")}
+          disabled={readOnly}
+        >
+          {t("indicadores.addReport", "Add Novo Relatório")}
+        </Button>
+      </Paper>
+
+      {/* ── Histórico de Vendas ── */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
+          HISTÓRICO DE VENDAS
+        </Typography>
+        <Divider sx={{ mb: 2 }} />
+        {data.historicoVendas.rows.map((row, idx) => (
+          <DocumentValidationRow
+            key={idx}
+            item={row}
+            onUpdate={(u) => updateHistoricoRow("historicoVendas", idx, u)}
+            onFileChange={(f) => updateHistoricoFile("historicoVendas", idx, f)}
+            onDelete={
+              data.historicoVendas.rows.length > 1
+                ? () => removeHistoricoRow("historicoVendas", idx)
+                : undefined
+            }
+            readOnly={readOnly}
+            label={`Relatório ${idx + 1}`}
+            projectId={projectId}
+            historyLabelKey={`indicadores.historicoVendas.${row.id || idx}`}
+          />
+        ))}
+        <Button
+          variant="outlined"
+          startIcon={<AddIcon />}
+          onClick={() => addHistoricoRow("historicoVendas")}
+          disabled={readOnly}
+        >
+          {t("indicadores.addReport", "Add Novo Relatório")}
+        </Button>
+      </Paper>
+
+      {/* ── Outros Relatórios (itens fixos) ── */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
+          OUTROS RELATÓRIOS
+        </Typography>
+        <Divider sx={{ mb: 2 }} />
+        <DocumentValidationRow
+          item={data.paretoVendas}
+          onUpdate={(u) => updateSimple("paretoVendas", u)}
+          onFileChange={(f) => updateSimpleFile("paretoVendas", f)}
+          readOnly={readOnly}
+          label="Pareto de Vendas"
+          projectId={projectId}
+          historyLabelKey="indicadores.paretoVendas"
+        />
+        <DocumentValidationRow
+          item={data.paretoFornecedores}
+          onUpdate={(u) => updateSimple("paretoFornecedores", u)}
+          onFileChange={(f) => updateSimpleFile("paretoFornecedores", f)}
+          readOnly={readOnly}
+          label="Pareto de Fornecedores"
+          projectId={projectId}
+          historyLabelKey="indicadores.paretoFornecedores"
+        />
+        <DocumentValidationRow
+          item={data.relatorioCusto}
+          onUpdate={(u) => updateSimple("relatorioCusto", u)}
+          onFileChange={(f) => updateSimpleFile("relatorioCusto", f)}
+          readOnly={readOnly}
+          label="Relatório de Custo"
+          projectId={projectId}
+          historyLabelKey="indicadores.relatorioCusto"
+        />
+        <DocumentValidationRow
+          item={data.relatorioCentroCusto}
+          onUpdate={(u) => updateSimple("relatorioCentroCusto", u)}
+          onFileChange={(f) => updateSimpleFile("relatorioCentroCusto", f)}
+          readOnly={readOnly}
+          label="Relatório de Centro de Custo"
+          projectId={projectId}
+          historyLabelKey="indicadores.relatorioCentroCusto"
+        />
+      </Paper>
+
+      {/* ── Salvar ── */}
+      <Box sx={{ display: "flex", justifyContent: "flex-start", mt: 1 }}>
+        <Button type="submit" variant="contained" disabled={readOnly || saving}>
+          {saving ? (
+            <>
+              <CircularProgress size={20} sx={{ mr: 1 }} />
+              {t("common.saving", "Salvando...")}
+            </>
+          ) : (
+            t("common.save", "Salvar")
+          )}
+        </Button>
       </Box>
     </Box>
-  )
-}
+  );
+};
 
-export default IndicadoresForm
+export default IndicadoresForm;

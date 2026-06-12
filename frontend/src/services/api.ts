@@ -10,6 +10,9 @@ export const api: AxiosInstance = axios.create({
 
 export function attachTokenInterceptor(getToken: () => string | null | undefined) {
   api.interceptors.request.use((config) => {
+    if (config.data instanceof FormData && config.headers) {
+      delete config.headers['Content-Type']
+    }
     const token = getToken()
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`
@@ -31,6 +34,9 @@ export function attachTokenInterceptor(getToken: () => string | null | undefined
 // so client requests include the header even before AuthProvider attaches
 // the token interceptor (avoids race on first load/refresh).
 api.interceptors.request.use((config) => {
+  if (config.data instanceof FormData && config.headers) {
+    delete config.headers['Content-Type']
+  }
   try {
     if (config.headers && !config.headers.Authorization) {
       const dbId = localStorage.getItem('db_user_id') || sessionStorage.getItem('db_user_id')

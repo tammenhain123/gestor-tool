@@ -24,10 +24,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import DeleteIcon from '@mui/icons-material/Delete'
 import AddIcon from '@mui/icons-material/Add'
 import IconButton from '@mui/material/IconButton'
-import Tooltip from '@mui/material/Tooltip'
-import VisibilityIcon from '@mui/icons-material/Visibility'
-import InfoIcon from '@mui/icons-material/Info'
-import FilePreview from '../common/FilePreview'
+import AttachmentControl from '../common/AttachmentControl'
 
 type Props = {
   initial?: any
@@ -77,19 +74,6 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
     const [uploadedKey, setUploadedKey] = useState<string | null>(mergedInitial?.contratoKey ?? null)
     const [uploadedName, setUploadedName] = useState<string | null>(mergedInitial?.contratoName ?? null)
     const [uploadedMeta, setUploadedMeta] = useState<any>(null)
-
-    // debug logging for uploaded name/key/state
-    React.useEffect(() => {
-      console.log('QualificationForm mount/state (top):', {
-        uploadedName,
-        uploadedKey,
-        uploadedMeta,
-        dataContratoFile: data?.contratoFile?.name ?? null,
-        dataContratoName: data?.contratoName ?? null,
-        initialContratoName: initial?.contratoName ?? initial?.contrato_name ?? null,
-      })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [uploadedName, uploadedKey, uploadedMeta, data?.contratoFile, data?.contratoName, initial?.contratoName])
 
   React.useEffect(() => {
     // Merge only the keys actually provided by `initial` into the current
@@ -286,82 +270,33 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
             if (data.contratoFile && saved?.id) {
           try {
             const file = data.contratoFile as File
-            const { presign } = await import('../../services/file.service')
+            const { uploadProjectFile } = await import('../../services/file.service')
             const projectIdToUse = saved.projectId || (saved.project && saved.project.id) || (payload.projectId) || propProjectId
             const tabName = 'Qualificação de contrato'
-            const p = await presign(projectIdToUse, file.name, propProjectName, tabName)
-            // upload to S3 via PUT
-            const uploadRes = await fetch(p.url, { method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file })
-            if (!uploadRes.ok) {
-              console.error('S3 upload failed', uploadRes.status, uploadRes.statusText)
-              alert('Falha ao enviar arquivo para S3: ' + uploadRes.status)
-              throw new Error(`S3 upload failed: ${uploadRes.status}`)
-            }
-            // save metadata only if upload succeeded
-            const { saveMetadata, list } = await import('../../services/file.service')
-            const savedMeta = await saveMetadata(saved.projectId || (saved.project && saved.project.id) || (payload.projectId), {
-              key: p.key,
+            const uploaded = await uploadProjectFile(projectIdToUse, file, propProjectName, tabName)
+            const { saveMetadata } = await import('../../services/file.service')
+            const savedMeta = await saveMetadata(projectIdToUse, {
+              key: uploaded.key,
               originalName: file.name,
               mimeType: file.type,
               size: file.size,
               qualificationId: saved.id,
             })
             // remember uploaded key, name and metadata for preview, clear input
-            setUploadedKey(p.key)
+            setUploadedKey(uploaded.key)
             setUploadedName(file.name)
             setPath('contratoName', file.name)
-            setPath('contratoKey', p.key)
+            setPath('contratoKey', uploaded.key)
             // persist contratoName/Key into qualification
             try {
-              if (onSave) await (onSave as any)({ solicType, ...data, contratoName: file.name, contratoKey: p.key, additionalCnaes: additionalCnaes.map((code, i) => ({ code, descricao: additionalCnaesDesc[i] || null })), additionalReps })
+              if (onSave) await (onSave as any)({ solicType, ...data, contratoName: file.name, contratoKey: uploaded.key, additionalCnaes: additionalCnaes.map((code, i) => ({ code, descricao: additionalCnaesDesc[i] || null })), additionalReps })
             } catch (e) { 
               // ignore save errors here
             }
             setUploadedMeta(savedMeta)
             setPath('contratoFile', null)
           } catch (e) {
-            console.warn('Presign upload failed — falling back to backend upload', e)
-            try {
-              const file = data.contratoFile as File
-              const projectId = saved.projectId || (saved.project && saved.project.id) || (payload.projectId) || propProjectId
-              const fd = new FormData()
-              fd.append('file', file)
-              const tabName = 'Qualificação de contrato'
-              if (propProjectName) fd.append('projectName', propProjectName)
-              fd.append('tabName', tabName)
-              const uploadResp = await fetch(`/api/projects/${projectId}/files`, { method: 'POST', body: fd })
-              if (!uploadResp.ok) {
-                console.error('Backend upload failed', uploadResp.status, uploadResp.statusText)
-                alert('Falha ao enviar arquivo para o servidor: ' + uploadResp.status)
-                throw new Error(`Backend upload failed: ${uploadResp.status}`)
-              }
-              const json = await uploadResp.json()
-              console.log('Arquivo enviado via backend (fallback):', json)
-              // backend already persisted metadata; remember key for preview
-              if (json && json.key) {
-                setUploadedKey(json.key)
-                setUploadedName(file.name)
-                setPath('contratoName', file.name)
-                setPath('contratoKey', json.key)
-                try {
-                  if (onSave) await (onSave as any)({ solicType, ...data, contratoName: file.name, contratoKey: json.key, additionalCnaes: additionalCnaes.map((code, i) => ({ code, descricao: additionalCnaesDesc[i] || null })), additionalReps })
-                } catch (e) {
-                  // ignore
-                }
-                // backend persisted metadata; try to fetch it
-                try {
-                  const { list } = await import('../../services/file.service')
-                  const files = await list(projectId)
-                  const meta = files.find((f: any) => f.s3Key === json.key || f.key === json.key)
-                  if (meta) setUploadedMeta(meta)
-                } catch (e) {
-                  // ignore
-                }
-                setPath('contratoFile', null)
-              }
-            } catch (err2) {
-              console.error('Fallback upload also failed', err2)
-            }
+            console.error('Upload failed', e)
           }
         }
       } catch (e) {
@@ -426,15 +361,12 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
   }
 
   const lookupCnae = async (code: string, activityPath: string, setDesc: (v: string | null) => void, setErr: (v: string | null) => void) => {
-    console.log('lookupCnae called with', code)
     const cleaned = (code || '').replace(/\D/g, '')
-    console.log('lookupCnae cleaned ->', cleaned)
     if (!cleaned) return
     setErr(null)
     setDesc(null)
     try {
       const data = await getCnaeClass(cleaned)
-      console.log('getCnaeClass result for', cleaned, data)
       if (!data) {
         setErr('CNAE não encontrado')
         return
@@ -610,46 +542,25 @@ const QualificationForm: React.FC<Props> = ({ initial, onSave, projectId: propPr
                 <TextField label="Enquadramento Fiscal" fullWidth value={data.enquadramentoFiscal} onChange={(e) => setPath('enquadramentoFiscal', e.target.value)} />
               </Grid>
             )}
-            <Grid item xs={12} md={6} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Button disabled={isReadOnly} variant="outlined" component="label">Anexar Contrato Social
-                <input
-                  type="file"
-                  hidden
-                    onChange={(e) => {
-                      const f = e.target.files?.[0] ?? null
-                      console.log('Selected contrato file:', f?.name ?? null)
-                      setPath('contratoFile', f)
-                      if (f) {
-                        setUploadedMeta(null)
-                        setUploadedName(null)
-                      }
-                    }}
-                />
-              </Button>
-                <FilePreview projectId={propProjectId || data.projectId || initial?.projectId} file={data?.contratoFile} fileName={data?.contratoFile?.name || uploadedName || data?.contratoName || initial?.contratoName || t('projectDetail.noFile')} s3Key={uploadedKey} />
-              {uploadedKey ? (
-                <>
-                  <Tooltip title={uploadedMeta ? `${uploadedMeta.uploadedBy || 'Desconhecido'} — ${new Date(uploadedMeta.createdAt).toLocaleString()}` : 'Informações do arquivo'}>
-                    <IconButton aria-label="Informações do contrato" sx={{ color: 'primary.main' }}>
-                      <InfoIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <IconButton aria-label="Visualizar contrato" sx={{ color: 'primary.main' }} onClick={async () => {
-                    try {
-                      const projectIdToUse = data.projectId || propProjectId || (initial?.projectId)
-                      const { presignGet } = await import('../../services/file.service')
-                      const res = await presignGet(projectIdToUse || '', uploadedKey)
-                      if (res && res.url) window.open(res.url, '_blank')
-                      else alert('Não foi possível obter URL de visualização')
-                    } catch (e) {
-                      console.error('Erro ao obter presign get', e)
-                      alert('Erro ao obter URL de visualização')
-                    }
-                  }}>
-                    <VisibilityIcon />
-                  </IconButton>
-                </>
-              ) : null}
+            <Grid item xs={12} md={6}>
+              <AttachmentControl
+                projectId={propProjectId || data.projectId || initial?.projectId}
+                file={data?.contratoFile}
+                fileName={data?.contratoFile?.name || uploadedName || data?.contratoName || initial?.contratoName || null}
+                s3Key={uploadedKey}
+                historyQualificationId={initial?.id || data?.id || null}
+                disabled={isReadOnly}
+                buttonLabel="Anexar Contrato Social"
+                uploadedBy={uploadedMeta?.uploadedBy || null}
+                uploadedAt={uploadedMeta?.createdAt || uploadedMeta?.updatedAt || null}
+                onChange={(f) => {
+                  setPath('contratoFile', f)
+                  if (f) {
+                    setUploadedMeta(null)
+                    setUploadedName(null)
+                  }
+                }}
+              />
             </Grid>
 
             <Grid item xs={12} md={4}>

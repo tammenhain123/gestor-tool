@@ -9,9 +9,9 @@ import {
 } from "typeorm";
 import { Project } from "./project.entity";
 
-@Entity("indicators")
+@Entity("requirements")
 @Unique(["projectId"])
-export class Indicator {
+export class Requirement {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 

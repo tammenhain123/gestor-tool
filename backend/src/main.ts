@@ -1,4 +1,4 @@
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as bodyParser from 'body-parser';
@@ -7,6 +7,7 @@ import { Repository } from 'typeorm'
 import { User, Role } from './users/user.entity'
 
 async function bootstrap() {
+  const logger = new Logger('Bootstrap')
   const app = await NestFactory.create(AppModule);
 
   // Increase payload size to accept large base64 data URIs (e.g. logo uploads)
@@ -33,7 +34,7 @@ async function bootstrap() {
     const username = 'MasterUser'
     const email = 'luizrobertoff@gestortool.com.br'
 
-    console.log('Checking MASTER user...')
+    logger.log('Checking MASTER user...')
 
     const exists = await userRepo.findOne({ where: { role: Role.MASTER } })
     const provisionalPassword = process.env.MASTER_PASSWORD || 'GestorTool!989'
@@ -42,9 +43,9 @@ async function bootstrap() {
       if (!exists.password) {
         exists.password = provisionalPassword
         await userRepo.save(exists)
-        console.log('MASTER existed — provisional password set:', provisionalPassword)
+        logger.log('MASTER existed and provisional password was set')
       } else {
-        console.log('MASTER already exists.')
+        logger.log('MASTER already exists.')
       }
     } else {
       const user = userRepo.create({
@@ -57,16 +58,16 @@ async function bootstrap() {
       })
 
       await userRepo.save(user)
-      console.log('MASTER created successfully. Provisional password:', provisionalPassword)
+      logger.log('MASTER created successfully.')
     }
   } catch (err) {
-    console.error('Seed error:', err)
+    logger.error('Seed error', err as any)
   }
 
   const port = Number(process.env.PORT) || 4000;
 
   await app.listen(port);
-  console.log(`🚀 Application is running on port ${port}`);
+  logger.log(`Application is running on port ${port}`);
 }
 
 bootstrap();

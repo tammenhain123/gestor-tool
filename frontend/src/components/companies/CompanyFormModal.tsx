@@ -105,9 +105,9 @@ const CompanyFormModal: React.FC<Props> = ({ open, onClose, onSave, company, sav
           <FormControlLabel control={<Checkbox checked={active} onChange={(e) => setActive(e.target.checked)} />} label="Active" />
         </Box>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={saving}>Cancel</Button>
+      <DialogActions sx={{ justifyContent: 'flex-start' }}>
         <Button onClick={handleSave} variant="contained" disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
+        <Button onClick={onClose} disabled={saving}>Cancel</Button>
       </DialogActions>
     </Dialog>
   )

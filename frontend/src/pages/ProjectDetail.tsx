@@ -1,221 +1,407 @@
-import React, { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import Box from '@mui/material/Box'
-import Typography from '@mui/material/Typography'
-import Tabs from '@mui/material/Tabs'
-import Tab from '@mui/material/Tab'
-import Paper from '@mui/material/Paper'
-import TextField from '@mui/material/TextField'
-import Button from '@mui/material/Button'
-import Stack from '@mui/material/Stack'
-import Grid from '@mui/material/Grid'
-import Snackbar from '@mui/material/Snackbar'
-import Alert from '@mui/material/Alert'
-import { getProject } from '../services/project.service'
-import { Project } from '../types/project'
-import CapacidadeForm from '../components/projects/CapacidadeForm'
-import EstrategiaForm from '../components/projects/EstrategiaForm'
-import RequisitosForm from '../components/projects/RequisitosForm'
-import AvaliacaoCenarioForm from '../components/projects/AvaliacaoCenarioForm'
-import QualificationForm from '../components/projects/QualificationForm'
-import IndicadoresForm from '../components/projects/IndicadoresForm'
-import { useTranslation } from 'react-i18next'
+import React, { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Tabs from "@mui/material/Tabs";
+import Tab from "@mui/material/Tab";
+import Paper from "@mui/material/Paper";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import Stack from "@mui/material/Stack";
+import Grid from "@mui/material/Grid";
+import Snackbar from "@mui/material/Snackbar";
+import Alert from "@mui/material/Alert";
+import { getProject } from "../services/project.service";
+import { Project } from "../types/project";
+import CapacidadeForm from "../components/projects/capacidade/CapacidadeForm";
+import EstrategiaForm from "../components/projects/EstrategiaForm";
+import RequisitosForm from "../components/projects/RequisitosForm";
+import AvaliacaoCenarioForm from "../components/projects/AvaliacaoCenarioForm";
+import QualificationForm from "../components/projects/QualificationForm";
+import IndicadoresForm from "../components/projects/IndicadoresForm";
+import { useTranslation } from "react-i18next";
+import AttachmentControl from "../components/common/AttachmentControl";
+import { saveMetadata, uploadProjectFile } from "../services/file.service";
 
-const TabPanel: React.FC<{ children?: React.ReactNode; value: number; index: number }> = ({ children, value, index }) => {
-  if (value !== index) return null
-  return <Box sx={{ p: 2 }}>{children}</Box>
-}
+const TabPanel: React.FC<{
+  children?: React.ReactNode;
+  value: number;
+  index: number;
+}> = ({ children, value, index }) => {
+  if (value !== index) return null;
+  return <Box sx={{ p: 2 }}>{children}</Box>;
+};
 
 const ProjectDetail: React.FC = () => {
-  const { id } = useParams()
-  const [project, setProject] = useState<Project | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [qualification, setQualification] = useState<any | null>(null)
-  const [capacity, setCapacity] = useState<any | null>(null)
-  const [strategy, setStrategy] = useState<any | null>(null)
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
-  const [tab, setTab] = useState(0)
+  const { id } = useParams();
+  const [project, setProject] = useState<Project | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [qualification, setQualification] = useState<any | null>(null);
+  const [requirements, setRequirements] = useState<any | null>(null);
+  const [capacity, setCapacity] = useState<any | null>(null);
+  const [strategy, setStrategy] = useState<any | null>(null);
+  const [toast, setToast] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+  const [tab, setTab] = useState(0);
 
-  const { t } = useTranslation()
+  const { t } = useTranslation();
 
-  const [forms, setForms] = useState(Array.from({ length: 9 }, () => ({ text: '', file: null as File | null })))
+  const [forms, setForms] = useState(
+    Array.from({ length: 9 }, () => ({
+      text: "",
+      file: null as File | null,
+      originalName: "",
+      s3Key: "",
+      uploadedBy: "",
+      uploadedAt: "",
+    })),
+  );
 
   useEffect(() => {
-    if (!id) return
-    let mounted = true
-    ;(async () => {
+    if (!id) return;
+    let mounted = true;
+    (async () => {
       try {
-        const p = await getProject(id)
+        const p = await getProject(id);
         try {
-          const q = await (await import('../services/project.service')).getQualification(id)
-          setQualification(q ?? null)
+          const q = await (
+            await import("../services/project.service")
+          ).getQualification(id);
+          setQualification(q ?? null);
+          try {
+            const req = await (
+              await import("../services/project.service")
+            ).getRequirements(id);
+            setRequirements(req ?? null);
+          } catch (e) {}
+          try {
+            const c = await (
+              await import("../services/project.service")
+            ).getCapacity(id);
+            setCapacity(c ?? null);
             try {
-              const c = await (await import('../services/project.service')).getCapacity(id)
-              setCapacity(c ?? null)
-              try {
-                const s = await (await import('../services/project.service')).getStrategy(id)
-                setStrategy(s?.data ?? s ?? null)
-              } catch (e) {}
+              const s = await (
+                await import("../services/project.service")
+              ).getStrategy(id);
+              setStrategy(s?.data ?? s ?? null);
             } catch (e) {}
+          } catch (e) {}
         } catch (e) {
           // ignore qualification load errors
         }
-        if (!mounted) return
-        setProject(p)
+        if (!mounted) return;
+        setProject(p);
       } catch (e) {
         // ignore
       } finally {
-        if (mounted) setLoading(false)
+        if (mounted) setLoading(false);
       }
-    })()
-    return () => { mounted = false }
-  }, [id])
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [id]);
 
-  const handleTabChange = (_: any, v: number) => setTab(v)
+  const handleTabChange = (_: any, v: number) => setTab(v);
 
-  const handleFormChange = (index: number, updates: Partial<{ text: string; file: File | null }>) => {
+  const handleFormChange = (
+    index: number,
+    updates: Partial<{
+      text: string;
+      file: File | null;
+      originalName: string;
+      s3Key: string;
+      uploadedBy: string;
+      uploadedAt: string;
+    }>,
+  ) => {
     setForms((prev) => {
-      const next = prev.slice()
-      next[index] = { ...next[index], ...updates }
-      return next
-    })
-  }
+      const next = prev.slice();
+      next[index] = { ...next[index], ...updates };
+      return next;
+    });
+  };
 
-  const handleSave = (index: number) => {
-    const entry = forms[index]
-    console.log('Save tab', index + 1, entry)
-    alert(`Saved tab ${index + 1}`)
-  }
+  const handleSave = async (index: number) => {
+    const entry = forms[index];
+    if (id && entry.file instanceof File) {
+      const labelKey = `projectDetail.tab.${index + 1}`;
+      const uploaded = await uploadProjectFile(
+        id,
+        entry.file,
+        project?.name,
+        `Aba ${index + 1}`,
+        labelKey,
+      );
+      const savedMeta = await saveMetadata(id, {
+        key: uploaded.key,
+        originalName: entry.file.name,
+        mimeType: entry.file.type,
+        size: entry.file.size,
+        labelKey,
+      });
+      handleFormChange(index, {
+        file: null,
+        originalName: savedMeta?.originalName || entry.file.name,
+        s3Key: savedMeta?.s3Key || uploaded.key,
+        uploadedBy: savedMeta?.uploadedBy || "",
+        uploadedAt: savedMeta?.createdAt || savedMeta?.updatedAt || "",
+      });
+    }
+    alert(`Saved tab ${index + 1}`);
+  };
 
-  const tabLabels: string[] = t('projectDetail.tabs', { returnObjects: true }) as string[]
+  const tabLabels: string[] = t("projectDetail.tabs", {
+    returnObjects: true,
+  }) as string[];
 
-  if (loading) return <Box sx={{ p: 3 }}><Typography>{t('projectDetail.loading')}</Typography></Box>
-  if (!project) return <Box sx={{ p: 3 }}><Typography>{t('projectDetail.projectNotFound')}</Typography></Box>
+  if (loading)
+    return (
+      <Box sx={{ p: 3 }}>
+        <Typography>{t("projectDetail.loading")}</Typography>
+      </Box>
+    );
+  if (!project)
+    return (
+      <Box sx={{ p: 3 }}>
+        <Typography>{t("projectDetail.projectNotFound")}</Typography>
+      </Box>
+    );
 
   return (
     <Box sx={{ p: 3 }}>
-      <Paper sx={{ display: 'flex', gap: 2, alignItems: 'center', p: 2, mb: 2 }}>
-          <Box sx={{
-          width: 240,
-          height: 140,
-          backgroundImage: project.imageUrl ? `url(${project.imageUrl})` : undefined,
-          backgroundSize: 'contain',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          bgcolor: project.imageUrl ? 'transparent' : 'grey.100',
-          borderRadius: 2,
-          boxShadow: 1,
-          flexShrink: 0,
-        }} aria-label={project.name}>
+      <Paper
+        sx={{ display: "flex", gap: 2, alignItems: "center", p: 2, mb: 2 }}
+      >
+        <Box
+          sx={{
+            width: 240,
+            height: 140,
+            backgroundImage: project.imageUrl
+              ? `url(${project.imageUrl})`
+              : undefined,
+            backgroundSize: "contain",
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
+            bgcolor: project.imageUrl ? "transparent" : "grey.100",
+            borderRadius: 2,
+            boxShadow: 1,
+            flexShrink: 0,
+          }}
+          aria-label={project.name}
+        >
           {!project.imageUrl && (
-            <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Typography variant="caption" color="text.secondary">{t('projectDetail.noImage')}</Typography>
+            <Box
+              sx={{
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Typography variant="caption" color="text.secondary">
+                {t("projectDetail.noImage")}
+              </Typography>
             </Box>
           )}
         </Box>
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="h6">{project.name}</Typography>
-          <Typography variant="body2" color="text.secondary">{project.type} — {project.company?.name}</Typography>
-          <Typography variant="caption" color="text.secondary">{t('projectDetail.creator')} {project.creator?.username || project.creator?.id}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {project.type} — {project.company?.name}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {t("projectDetail.creator")}{" "}
+            {project.creator?.username || project.creator?.id}
+          </Typography>
         </Box>
       </Paper>
 
       <Paper>
-        <Tabs value={tab} onChange={handleTabChange} variant="scrollable" scrollButtons="auto">
-          {tabLabels.map((lbl, i) => <Tab label={lbl} key={i} />)}
+        <Tabs
+          value={tab}
+          onChange={handleTabChange}
+          variant="scrollable"
+          scrollButtons="auto"
+        >
+          {tabLabels.map((lbl, i) => (
+            <Tab label={lbl} key={i} />
+          ))}
         </Tabs>
 
         {Array.from({ length: tabLabels.length }).map((_, i) => (
           <TabPanel value={tab} index={i} key={i}>
             {i === 0 ? (
-              <QualificationForm initial={qualification ?? undefined} projectId={id} projectName={project?.name} onSave={async (data) => {
-                try {
-                  const saved = await (await import('../services/project.service')).saveQualification(id!, data)
-                  setQualification(saved)
-                  setToast({ type: 'success', message: 'Qualificação salva' })
-                  return saved
-                } catch (e) {
-                  console.error(e)
-                  setToast({ type: 'error', message: 'Erro ao salvar qualificação' })
-                  throw e
-                }
-              }} />
-            ) : i === 1 ? (
-              <EstrategiaForm initial={strategy ?? undefined} projectId={id} projectName={project?.name} onSave={async (data) => {
-                try {
-                  // `data` is the saved resource returned by the form
-                  setStrategy(data?.data ?? data)
-                  setToast({ type: 'success', message: 'Estratégia salva' })
-                  return data
-                } catch (e) {
-                  console.error(e)
-                  setToast({ type: 'error', message: 'Erro ao salvar estratégia' })
-                  throw e
-                }
-              }} />
-            ) : i === 2 ? (
-              <AvaliacaoCenarioForm initial={undefined} projectId={id} projectName={project?.name} onSave={async (data) => {
-                try {
-                  setToast({ type: 'success', message: 'Avaliação salva' })
-                  return data
-                } catch (e) {
-                  console.error(e)
-                  setToast({ type: 'error', message: 'Erro ao salvar avaliação' })
-                  throw e
-                }
-              }} />
-            ) : i === 3 ? (
-              <CapacidadeForm initial={capacity ?? undefined} projectId={id} projectName={project?.name} onSave={async (data) => {
-                try {
-                  // data is the saved resource returned by CapacidadeForm
-                  console.log('Capacidade saved', data)
-                  setToast({ type: 'success', message: 'Capacidade salva' })
-                  // refresh capacity state
+              <QualificationForm
+                initial={qualification ?? undefined}
+                projectId={id}
+                projectName={project?.name}
+                onSave={async (data) => {
                   try {
-                    const c = await (await import('../services/project.service')).getCapacity(id)
-                    setCapacity(c ?? null)
+                    const saved = await (
+                      await import("../services/project.service")
+                    ).saveQualification(id!, data);
+                    setQualification(saved);
+                    setToast({
+                      type: "success",
+                      message: "Qualificação salva",
+                    });
+                    return saved;
                   } catch (e) {
-                    // ignore
+                    console.error(e);
+                    setToast({
+                      type: "error",
+                      message: "Erro ao salvar qualificação",
+                    });
+                    throw e;
                   }
-                } catch (e) {
-                  console.error(e)
-                  setToast({ type: 'error', message: 'Erro ao salvar capacidade' })
-                }
-                return data
-              }} />
+                }}
+              />
+            ) : i === 1 ? (
+              <EstrategiaForm
+                initial={strategy ?? undefined}
+                projectId={id}
+                projectName={project?.name}
+                onSave={async (data) => {
+                  try {
+                    // `data` is the saved resource returned by the form
+                    setStrategy(data?.data ?? data);
+                    setToast({ type: "success", message: "Estratégia salva" });
+                    return data;
+                  } catch (e) {
+                    console.error(e);
+                    setToast({
+                      type: "error",
+                      message: "Erro ao salvar estratégia",
+                    });
+                    throw e;
+                  }
+                }}
+              />
+            ) : i === 2 ? (
+              <AvaliacaoCenarioForm
+                initial={requirements ?? undefined}
+                projectId={id}
+                projectName={project?.name}
+                onSave={async (data) => {
+                  try {
+                    const saved = await (
+                      await import("../services/project.service")
+                    ).saveRequirements(id!, data);
+                    setRequirements(saved);
+                    setToast({ type: "success", message: "Avaliação salva" });
+                    return saved;
+                  } catch (e) {
+                    console.error(e);
+                    setToast({
+                      type: "error",
+                      message: "Erro ao salvar avaliação",
+                    });
+                    throw e;
+                  }
+                }}
+              />
+            ) : i === 3 ? (
+              <CapacidadeForm projectId={id} projectName={project?.name} />
             ) : i === 4 ? (
-              <RequisitosForm onSave={(data) => { console.log('Requisitos saved', data); alert('Requisitos salvos (simulado)') }} />
+              <RequisitosForm
+                projectId={id}
+                projectName={project?.name}
+                onSave={async (data) => {
+                  setToast({ type: "success", message: "Requisitos salvos" });
+                  return data;
+                }}
+              />
             ) : i === 5 ? (
-              <IndicadoresForm initial={undefined} projectId={id} projectName={project?.name} onSave={async (data) => {
-                try {
-                  setToast({ type: 'success', message: 'Indicadores salvos' })
-                  return data
-                } catch (e) {
-                  console.error(e)
-                  setToast({ type: 'error', message: 'Erro ao salvar indicadores' })
-                }
-                return data
-              }} />
+              <IndicadoresForm
+                initial={undefined}
+                projectId={id}
+                projectName={project?.name}
+                onSave={async (data) => {
+                  try {
+                    setToast({
+                      type: "success",
+                      message: "Indicadores salvos",
+                    });
+                    return data;
+                  } catch (e) {
+                    console.error(e);
+                    setToast({
+                      type: "error",
+                      message: "Erro ao salvar indicadores",
+                    });
+                  }
+                  return data;
+                }}
+              />
             ) : (
-              <Box component="form" onSubmit={(e) => { e.preventDefault(); handleSave(i) }} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <TextField label={`Texto da aba ${i + 1}`} value={forms[i].text} onChange={(e) => handleFormChange(i, { text: e.target.value })} multiline />
+              <Box
+                component="form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSave(i).catch((err) => {
+                    setToast({
+                      type: "error",
+                      message: "Erro ao salvar arquivo da aba.",
+                    });
+                  });
+                }}
+                sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+              >
+                <TextField
+                  label={`Texto da aba ${i + 1}`}
+                  value={forms[i].text}
+                  onChange={(e) =>
+                    handleFormChange(i, { text: e.target.value })
+                  }
+                  multiline
+                />
                 <Stack direction="row" alignItems="center" spacing={2}>
-                  <Button variant="outlined" component="label">Enviar documento<input type="file" hidden onChange={(e) => handleFormChange(i, { file: e.target.files?.[0] ?? null })} /></Button>
-                  <Typography variant="body2">{forms[i].file ? forms[i].file.name : t('projectDetail.noFile')}</Typography>
+                  <AttachmentControl
+                    projectId={id}
+                    file={forms[i].file}
+                    fileName={forms[i].file?.name || forms[i].originalName || null}
+                    s3Key={forms[i].s3Key || null}
+                    historyLabelKey={`projectDetail.tab.${i + 1}`}
+                    buttonLabel="Enviar documento"
+                    uploadedBy={forms[i].uploadedBy || null}
+                    uploadedAt={forms[i].uploadedAt || null}
+                    onChange={(file) => handleFormChange(i, { file })}
+                    onError={(message) =>
+                      setToast({
+                        type: "error",
+                        message,
+                      })
+                    }
+                  />
                 </Stack>
                 <Box>
-                  <Button type="submit" variant="contained">Salvar</Button>
+                  <Button type="submit" variant="contained">
+                    Salvar
+                  </Button>
                 </Box>
               </Box>
             )}
           </TabPanel>
         ))}
-        <Snackbar open={!!toast} autoHideDuration={4000} onClose={() => setToast(null)}>
-          {toast ? <Alert severity={toast.type} onClose={() => setToast(null)}>{toast.message}</Alert> : null}
+        <Snackbar
+          open={!!toast}
+          autoHideDuration={4000}
+          anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+          onClose={() => setToast(null)}
+        >
+          {toast ? (
+            <Alert severity={toast.type} onClose={() => setToast(null)}>
+              {toast.message}
+            </Alert>
+          ) : null}
         </Snackbar>
       </Paper>
     </Box>
-  )
-}
+  );
+};
 
-export default ProjectDetail
+export default ProjectDetail;

@@ -142,9 +142,9 @@ export default function UserFormModal({ open, onClose, onSave, user }: Props) {
           ))}
         </TextField>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+      <DialogActions sx={{ justifyContent: 'flex-start' }}>
         <Button onClick={handleSave} variant="contained">Save</Button>
+        <Button onClick={onClose}>Cancel</Button>
       </DialogActions>
     </Dialog>
   )
